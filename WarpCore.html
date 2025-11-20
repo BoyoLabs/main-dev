@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast Browser Performance Benchmark (Dark Mode)</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the result screen */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.3); opacity: 0.8; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+        .animate-pulse-ring {
+            animation: pulse-ring 1s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        .score-display {
+            font-family: 'Inter', sans-serif;
+            transition: all 0.3s ease-in-out;
+        }
+        canvas {
+            display: none; /* Hidden by default, only used for calculation */
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-900 min-h-screen flex items-center justify-center p-4 text-gray-200">
+
+    <div id="app-container" class="w-full max-w-2xl bg-gray-800 shadow-2xl rounded-xl p-8 transition-all duration-300">
+
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-extrabold text-indigo-400">WarpCore Benchmark</h1>
+            <p class="text-gray-400 mt-2">Optimized for quick, non-blocking CPU and GPU stress testing.</p>
+        </header>
+
+        <!-- Main Content Area -->
+        <main id="benchmark-area">
+            
+            <!-- Initial State / Ready to Start -->
+            <div id="start-screen" class="text-center">
+                <div class="text-6xl text-indigo-400 mb-6">🚀</div>
+                <h2 class="text-2xl font-semibold mb-4 text-white">Ready to Test?</h2>
+                <p class="text-gray-400 mb-8">
+                    This test is designed to run quickly using a dedicated background thread for the CPU test.
+                </p>
+                <button id="startButton" class="w-full md:w-auto px-10 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-500 transition duration-150 transform hover:scale-105" onclick="startBenchmark()">
+                    Start Benchmark
+                </button>
+            </div>
+
+            <!-- Running State -->
+            <div id="running-screen" class="hidden text-center">
+                <div class="relative inline-flex mb-8">
+                    <div class="w-16 h-16 bg-indigo-400 rounded-full animate-ping opacity-75"></div>
+                    <div class="w-16 h-16 bg-indigo-600 rounded-full absolute top-0 left-0 flex items-center justify-center">
+                        <div class="text-white font-bold text-xl" id="timerDisplay">...</div>
+                    </div>
+                </div>
+                <h2 class="text-2xl font-semibold mb-2 text-white" id="currentTestTitle">Initializing...</h2>
+                <p class="text-gray-400" id="currentTestDescription">Running heavy workload on a dedicated background thread...</p>
+                <div class="mt-8 h-4 bg-gray-700 rounded-full overflow-hidden">
+                    <div id="progressBar" class="h-full bg-indigo-500 transition-all duration-300" style="width: 0%;"></div>
+                </div>
+            </div>
+
+            <!-- Result State -->
+            <div id="result-screen" class="hidden text-center">
+                <div class="relative p-6 mb-8">
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <!-- Background Pulse Animation -->
+                        <div class="w-24 h-24 bg-green-200 rounded-full animate-pulse-ring"></div>
+                    </div>
+                    <!-- Final Score Display -->
+                    <div class="relative w-48 h-48 mx-auto bg-green-600 rounded-full flex flex-col items-center justify-center shadow-xl">
+                        <span class="text-7xl font-extrabold text-white score-display" id="finalScoreDisplay">0</span>
+                        <span class="text-sm font-medium text-white/80 mt-1">TOTAL SCORE</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                    <div class="bg-indigo-900/40 p-4 rounded-lg">
+                        <h3 class="font-bold text-lg text-indigo-400">CPU Score</h3>
+                        <p class="text-4xl font-extrabold text-indigo-200 mt-1 score-display" id="cpuScoreDisplay">0</p>
+                        <p class="text-sm text-indigo-400 mt-1">Based on recursive calculation speed (Web Worker).</p>
+                    </div>
+                    <div class="bg-purple-900/40 p-4 rounded-lg">
+                        <h3 class="font-bold text-lg text-purple-400">GPU Score</h3>
+                        <p class="text-4xl font-extrabold text-purple-200 mt-1 score-display" id="gpuScoreDisplay">0</p>
+                        <p class="text-sm text-purple-400 mt-1">Based on Mandelbrot shader performance (FPS).</p>
+                    </div>
+                </div>
+
+                <button class="mt-8 px-8 py-3 bg-gray-700 text-gray-200 font-bold rounded-lg hover:bg-gray-600 transition duration-150" onclick="resetBenchmark()">
+                    Run Again
+                </button>
+            </div>
+            
+            <!-- The canvas is hidden as it's only used for computation -->
+            <canvas id="gpuCanvas"></canvas>
+
+        </main>
+        
+        <!-- Footer -->
+        <footer class="text-center mt-8 pt-4 border-t border-gray-700 text-gray-600 text-xs">
+            Performance metrics are relative to browser implementation and hardware. (C) Boyo Labs 2025 -- GPL License
+        </footer>
+
+    </div>
+
+    <script>
+        // Global state and constants
+        // --- OPTIMIZED PARAMETERS ---
+        const TOTAL_CPU_ITERATIONS = 10000;
+        const FIB_N = 30;
+        const CPU_CHUNK_SIZE = 250; 
+        const GPU_DURATION_MS = 1500;
+        
+        // --- SCORING CALIBRATION (x10 for higher scores) ---
+        const CPU_CALIBRATION_FACTOR = 18000; // Multiplied by 10
+        const GPU_CALIBRATION_FACTOR = 5.0; // Multiplied by 10
+        // --- END SCORING CALIBRATION ---
+        
+        const MANDELBROT_MAX_ITER = 400;
+
+
+        const startScreen = document.getElementById('start-screen');
+        const runningScreen = document.getElementById('running-screen');
+        const resultScreen = document.getElementById('result-screen');
+        const currentTestTitle = document.getElementById('currentTestTitle');
+        const currentTestDescription = document.getElementById('currentTestDescription');
+        const progressBar = document.getElementById('progressBar');
+        const finalScoreDisplay = document.getElementById('finalScoreDisplay');
+        const cpuScoreDisplay = document.getElementById('cpuScoreDisplay');
+        const gpuScoreDisplay = document.getElementById('gpuScoreDisplay');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const canvas = document.getElementById('gpuCanvas');
+
+        let gl = null;
+        let program = null;
+        let isGpuTestRunning = false;
+        let framesRendered = 0;
+
+        /**
+         * A lightweight sleep/yield function (mostly for GPU wait).
+         */
+        const yieldToUI = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+        // --- CPU Benchmark (Web Worker Implementation) ---
+        
+        // This script runs the heavy logic on a background thread.
+        const cpuWorkerScript = `
+            const TOTAL_CPU_ITERATIONS = ${TOTAL_CPU_ITERATIONS};
+            const FIB_N = ${FIB_N};
+            const CPU_CHUNK_SIZE = ${CPU_CHUNK_SIZE};
+
+            function cpuHeavyCalculation(n) {
+                if (n <= 1) return n;
+                if (n === 2) return 1;
+                // Complex recursive calculation
+                let result = (cpuHeavyCalculation(n - 1) + cpuHeavyCalculation(n - 2)) * Math.sin(n) / Math.PI;
+                return result;
+            }
+
+            self.onmessage = function(e) {
+                if (e.data === 'start') {
+                    const startTime = performance.now();
+                    let totalIterations = 0;
+                    let lastProgressTime = 0;
+
+                    while (totalIterations < TOTAL_CPU_ITERATIONS) {
+                        // Process chunk
+                        for (let i = 0; i < CPU_CHUNK_SIZE; i++) {
+                            cpuHeavyCalculation(FIB_N);
+                        }
+                        
+                        totalIterations += CPU_CHUNK_SIZE;
+                        
+                        // Send progress update back to the main thread
+                        if (performance.now() - lastProgressTime > 50) { 
+                            self.postMessage({ type: 'progress', iterations: totalIterations });
+                            lastProgressTime = performance.now();
+                        }
+                    }
+
+                    const endTime = performance.now();
+                    const timeTaken = endTime - startTime;
+                    
+                    // Send final result
+                    self.postMessage({ type: 'complete', timeTaken: timeTaken });
+                }
+            };
+        `;
+
+        /**
+         * Runs the CPU benchmark using an inline Web Worker.
+         * @returns {Promise<number>} Resolves with the time taken in milliseconds.
+         */
+        function runCPUBenchmark() {
+            currentTestTitle.textContent = "CPU Benchmark: Web Worker Thread";
+            timerDisplay.textContent = "CPU";
+            
+            return new Promise((resolve, reject) => {
+                try {
+                    // Create the worker from the string script
+                    const blob = new Blob([cpuWorkerScript], { type: 'application/javascript' });
+                    const workerUrl = URL.createObjectURL(blob);
+                    const worker = new Worker(workerUrl);
+
+                    worker.onmessage = function(e) {
+                        if (e.data.type === 'progress') {
+                            const totalIterations = e.data.iterations;
+                            const progressPercent = (totalIterations / TOTAL_CPU_ITERATIONS) * 100 * 0.5; // CPU is 50% of total
+                            progressBar.style.width = `${progressPercent}%`;
+                            currentTestDescription.textContent = `Running ${totalIterations.toLocaleString()} of ${TOTAL_CPU_ITERATIONS.toLocaleString()} iterations (N=${FIB_N})...`;
+                        } else if (e.data.type === 'complete') {
+                            worker.terminate();
+                            URL.revokeObjectURL(workerUrl);
+                            resolve(e.data.timeTaken);
+                        }
+                    };
+
+                    worker.onerror = function(error) {
+                        worker.terminate();
+                        URL.revokeObjectURL(workerUrl);
+                        reject(new Error("CPU Worker failed: " + error.message));
+                    };
+
+                    // Start the worker
+                    worker.postMessage('start');
+
+                } catch (e) {
+                    reject(new Error("Failed to initialize Web Worker: " + e.message));
+                }
+            });
+        }
+        
+        // --- WebGL Setup and GPU Benchmark ---
+        
+        // Vertex Shader: Standard full-screen quad setup
+        const vertexShaderSource = `#version 300 es
+            in vec2 a_position;
+            void main() {
+                gl_Position = vec4(a_position, 0.0, 1.0);
+            }
+        `;
+
+        // Mandelbrot Set Fragment Shader (Highly computationally intensive)
+        const fragmentShaderSource = `#version 300 es
+            precision highp float;
+            out vec4 outColor;
+            uniform vec2 u_resolution;
+            // OPTIMIZED: MAX_ITER reduced for faster rendering
+            const int MAX_ITER = ${MANDELBROT_MAX_ITER}; 
+
+            vec3 get_color(int iterations) {
+                if (iterations == MAX_ITER) {
+                    return vec3(0.0, 0.0, 0.0);
+                }
+                
+                float t = float(iterations) / float(MAX_ITER);
+                return 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.3, 0.6)));
+            }
+
+            void main() {
+                vec2 uv = gl_FragCoord.xy / u_resolution;
+
+                vec2 c = vec2(
+                    mix(-2.5, 1.0, uv.x),
+                    mix(-1.25, 1.25, uv.y)
+                );
+
+                vec2 z = vec2(0.0, 0.0);
+                int iterations = 0;
+
+                for (int i = 0; i < MAX_ITER; ++i) {
+                    float x = z.x * z.x - z.y * z.y + c.x;
+                    float y = 2.0 * z.x * z.y + c.y;
+                    z = vec2(x, y);
+
+                    if (dot(z, z) > 4.0) {
+                        iterations = i;
+                        break;
+                    }
+                    iterations = i + 1;
+                }
+
+                outColor = vec4(get_color(iterations), 1.0);
+            }
+        `;
+
+        /**
+         * Initializes the WebGL context and shaders.
+         */
+        function initWebGL() {
+            gl = canvas.getContext('webgl2');
+            if (!gl) {
+                return false;
+            }
+
+            // Compile Shaders
+            const compileShader = (source, type) => {
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, source);
+                gl.compileShader(shader);
+                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                    console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+                    gl.deleteShader(shader);
+                    return null;
+                }
+                return shader;
+            };
+
+            const vertexShader = compileShader(vertexShaderSource, gl.VERTEX_SHADER);
+            const fragmentShader = compileShader(fragmentShaderSource, gl.FRAGMENT_SHADER);
+
+            // Link Program
+            program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Program link error:', gl.getProgramInfoLog(program));
+                return false;
+            }
+            gl.useProgram(program);
+
+            // Setup a full-screen quad 
+            const positions = new Float32Array([
+                -1, -1, -1, 1, 1, -1, 1, 1,
+            ]);
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+            const aPositionLoc = gl.getAttribLocation(program, 'a_position');
+            gl.enableVertexAttribArray(aPositionLoc);
+            gl.vertexAttribPointer(aPositionLoc, 2, gl.FLOAT, false, 0, 0);
+
+            const uResolutionLoc = gl.getUniformLocation(program, 'u_resolution');
+
+            // Set canvas size for full-resolution rendering (1000x1000)
+            canvas.width = 1000;
+            canvas.height = 1000;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.uniform2f(uResolutionLoc, canvas.width, canvas.height);
+
+            return true;
+        }
+
+        /**
+         * The main rendering loop for the GPU test.
+         */
+        function gpuDrawLoop(timestamp) {
+            if (!isGpuTestRunning || !gl) return;
+
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            gl.finish(); // Crucial: forces GPU execution before the frame count increments
+
+            framesRendered++;
+
+            requestAnimationFrame(gpuDrawLoop);
+        }
+        
+        /**
+         * Runs the GPU benchmark test.
+         */
+        async function runGPUBenchmark() {
+            currentTestTitle.textContent = "GPU Benchmark: WebGL 2.0 Fractal";
+            timerDisplay.textContent = "GPU";
+            
+            const baseProgress = 50; 
+            
+            if (!initWebGL()) {
+                currentTestDescription.textContent = "WebGL 2.0 not supported. Skipping GPU test.";
+                progressBar.style.width = '100%'; 
+                await yieldToUI(500);
+                return 0; 
+            }
+            
+            currentTestDescription.textContent = `Rendering optimized Mandelbrot set for ${GPU_DURATION_MS / 1000} seconds...`;
+            
+            framesRendered = 0;
+            isGpuTestRunning = true;
+            let startTime = performance.now();
+            
+            // Start the drawing loop
+            requestAnimationFrame(gpuDrawLoop);
+
+            // Wait for the duration, updating the progress bar periodically
+            const updateInterval = 100; // More frequent updates
+            for (let timePassed = 0; timePassed < GPU_DURATION_MS; timePassed += updateInterval) {
+                await yieldToUI(updateInterval);
+                const elapsed = Math.min(timePassed + updateInterval, GPU_DURATION_MS);
+                const progress = (elapsed / GPU_DURATION_MS) * 50; 
+                progressBar.style.width = `${baseProgress + progress}%`;
+            }
+
+            isGpuTestRunning = false;
+            let endTime = performance.now();
+            let actualTime = endTime - startTime;
+
+            // Clean up WebGL context (essential for resource release)
+            if (gl) {
+                gl.getExtension('WEBGL_lose_context')?.loseContext();
+                gl = null;
+            }
+            
+            const averageFPS = framesRendered / (actualTime / 1000);
+
+            return averageFPS;
+        }
+
+        /**
+         * Main function to coordinate the benchmark tests.
+         */
+        async function startBenchmark() {
+            // UI State change: Start -> Running
+            startScreen.classList.add('hidden');
+            resultScreen.classList.add('hidden');
+            runningScreen.classList.remove('hidden');
+
+            let cpuTimeMs = 0;
+            let gpuFPS = 0;
+
+            try {
+                // 1. CPU Test 
+                cpuTimeMs = await runCPUBenchmark();
+                
+                // 2. GPU Test
+                gpuFPS = await runGPUBenchmark();
+
+                // Finalization
+                progressBar.style.width = '100%';
+                currentTestTitle.textContent = "Benchmark Complete!";
+                currentTestDescription.textContent = "Calculating final scores...";
+                timerDisplay.textContent = "✅";
+                
+                await yieldToUI(500);
+
+            } catch (error) {
+                currentTestTitle.textContent = "An Error Occurred";
+                currentTestDescription.textContent = "Could not complete the benchmark. Check console for details. (Worker/WebGL Error)";
+                console.error("Benchmark Execution Error:", error);
+                await yieldToUI(3000);
+                resetBenchmark();
+                return;
+            }
+
+            // --- Scoring ---
+
+            // CPU Score: Lower time taken is better.
+            const cpuScore = Math.floor(CPU_CALIBRATION_FACTOR * (1000 / cpuTimeMs));
+
+            // GPU Score: Higher FPS is better.
+            const gpuScore = Math.floor(gpuFPS * GPU_CALIBRATION_FACTOR);
+
+            // Final Score
+            const finalScore = cpuScore + gpuScore;
+
+            // --- Display Results ---
+            runningScreen.classList.add('hidden');
+            resultScreen.classList.remove('hidden');
+
+            cpuScoreDisplay.textContent = cpuScore.toLocaleString();
+            gpuScoreDisplay.textContent = gpuScore.toLocaleString();
+
+            // Animate final score
+            let currentScore = 0;
+            const scoreInterval = setInterval(() => {
+                if (currentScore < finalScore) {
+                    currentScore += Math.ceil((finalScore - currentScore) / 10); 
+                    if (currentScore >= finalScore) currentScore = finalScore;
+                    finalScoreDisplay.textContent = currentScore.toLocaleString();
+                } else {
+                    clearInterval(scoreInterval);
+                    finalScoreDisplay.textContent = finalScore.toLocaleString();
+                }
+            }, 30);
+
+            console.log("--- Benchmark Results ---");
+            console.log(`CPU Time Taken: ${cpuTimeMs.toFixed(2)}ms`);
+            console.log(`CPU Score: ${cpuScore}`);
+            console.log(`GPU Average FPS: ${gpuFPS.toFixed(2)}`);
+            console.log(`GPU Score: ${gpuScore}`);
+            console.log(`FINAL SCORE: ${finalScore}`);
+        }
+
+        /**
+         * Resets the application state to the start screen.
+         */
+        function resetBenchmark() {
+            startScreen.classList.remove('hidden');
+            runningScreen.classList.add('hidden');
+            resultScreen.classList.add('hidden');
+            progressBar.style.width = '0%';
+        }
+
+    </script>
+</body>
+</html>
