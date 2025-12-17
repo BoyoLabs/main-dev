@@ -6,6 +6,10 @@ This repo is all about my webapps. Single Page Apps (SPAs) are the focus.
 
 ## APPS LIST
 
+### SAK.bat
+
+* a (S)wiss (A)rmy (K)nife for common computer troubleshooting. Basic, but useful for my job.
+
 ### ping.php
 
 * continually pings with 1 packet just to see if theres a connection to a certain server. I needed this to test my mesh vpn network from within my server stack already. Basically, it checks to see if the server itself can check for an address.
