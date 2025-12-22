@@ -1,4 +1,4 @@
-# Programming and Scripting
+# Main Dev
 
 This repo is dedicated to my single page web apps, programming and other scripting. WIPs may or may not be included -- if a project gets abandoned, it will be put up here because there is no more work being done on it, so maybe someone wants to pick it up.
 
