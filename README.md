@@ -4,7 +4,11 @@ This repo is dedicated to my single page web apps, programming and other scripti
 
 ---
 
-## APPS LIST
+## APPS LIST|
+
+### WebAmp.html
+
+* a retro audio visualizer that is like winamp or windows media player of yore
 
 ### SAK.bat
 
