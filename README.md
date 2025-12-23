@@ -8,7 +8,7 @@ This repo is dedicated to my single page web apps, programming and other scripti
 
 ### justchat.html
 
-* A basic P2P multi user chat room
+* A basic Pub/Sub multi user chat room (serverless)
 * github.io link: https://boyolabs.github.io/main-dev/justchat.html
 
 ### SkeletonSlicer.html (WIP)
