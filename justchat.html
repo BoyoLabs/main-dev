@@ -2,59 +2,85 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Global Chat | BoyoLabs</title>
     <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.7.2.2.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #1a1a1a; color: white; display: flex; justify-content: center; height: 100vh; margin: 0; }
-        #app { width: 100%; max-width: 600px; display: flex; flex-direction: column; background: #222; border: 1px solid #444; }
-        #header { padding: 15px; background: #333; display: flex; justify-content: space-between; align-items: center; }
-        #chat-output { flex-grow: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { padding: 8px 12px; border-radius: 8px; max-width: 80%; line-height: 1.4; }
-        .msg.me { align-self: flex-end; background: #007bff; }
-        .msg.them { align-self: flex-start; background: #444; }
-        .msg b { display: block; font-size: 0.8em; margin-bottom: 4px; opacity: 0.7; }
-        #input-area { padding: 15px; background: #333; display: flex; gap: 10px; }
-        input { flex-grow: 1; padding: 10px; border: none; border-radius: 4px; background: #444; color: white; }
-        button { padding: 10px 20px; border: none; border-radius: 4px; background: #007bff; color: white; cursor: pointer; }
+        /* Responsive CSS Variables */
+        :root { --bg: #1a1a1a; --panel: #222; --accent: #007bff; --text: #eee; }
+
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; height: 100dvh; overflow: hidden; }
+
+        #app { width: 100%; height: 100%; display: flex; flex-direction: column; background: var(--panel); }
+
+        #header { padding: 15px; background: #333; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+        
+        #username-display { font-size: 0.75rem; color: var(--accent); cursor: pointer; text-decoration: underline; }
+
+        #chat-output { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px; }
+
+        /* Modern Chat Bubbles */
+        .msg { padding: 10px 14px; border-radius: 18px; max-width: 85%; font-size: 0.95rem; position: relative; word-wrap: break-word; }
+        .msg.me { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 4px; }
+        .msg.them { align-self: flex-start; background: #444; border-bottom-left-radius: 4px; }
+        .msg b { display: block; font-size: 0.7rem; margin-bottom: 2px; text-transform: uppercase; opacity: 0.8; }
+
+        #input-area { padding: 10px; background: #2a2a2a; display: flex; gap: 8px; border-top: 1px solid #444; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+        
+        input { flex: 1; padding: 12px; border: 1px solid #555; border-radius: 20px; background: #111; color: white; font-size: 1rem; outline: none; }
+        button { background: var(--accent); color: white; border: none; padding: 0 20px; border-radius: 20px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:active { transform: scale(0.95); opacity: 0.8; }
+
+        /* Mobile specific font sizing */
+        @media (max-width: 600px) {
+            .msg { max-width: 90%; font-size: 0.9rem; }
+            #header { padding: 10px 15px; }
+        }
     </style>
 </head>
 <body>
 
 <div id="app">
     <div id="header">
-        <strong>Global Lounge</strong>
-        <span id="username-display" style="font-size: 0.8em; cursor: pointer;"></span>
+        <span>🚀 BoyoChat</span>
+        <div id="username-display" onclick="changeName()"></div>
     </div>
     <div id="chat-output"></div>
     <div id="input-area">
-        <input type="text" id="message-input" placeholder="Type a message...">
+        <input type="text" id="message-input" placeholder="Say something..." autocomplete="off">
         <button onclick="send()">Send</button>
     </div>
 </div>
 
 <script>
-    // 1. SETUP: Get free keys at admin.pubnub.com
-    const MY_USER_ID = localStorage.getItem('chat_userid') || "User_" + Math.floor(Math.random() * 1000);
-    localStorage.setItem('chat_userid', MY_USER_ID);
-    
+    // --- USER MANAGEMENT ---
+    let currentUID = localStorage.getItem('chat_userid') || "Pilot_" + Math.floor(Math.random() * 1000);
+    localStorage.setItem('chat_userid', currentUID);
+
+    function changeName() {
+        let newName = prompt("Enter new username:", currentUID);
+        if (newName && newName.trim().length > 0) {
+            localStorage.setItem('chat_userid', newName.trim());
+            location.reload(); // Quickest way to re-init PubNub with new ID
+        }
+    }
+
+    // --- PUBNUB CONFIG ---
     const pubnub = new PubNub({
-        publishKey: 'demo',   // Replace with your real Publish Key
-        subscribeKey: 'demo', // Replace with your real Subscribe Key
-        userId: MY_USER_ID
+        publishKey: 'demo',   // REPLACE WITH YOUR KEYS
+        subscribeKey: 'demo', 
+        userId: currentUID
     });
 
-    const channel = 'global_main_room';
-
-    // 2. UI ELEMENTS
+    const channel = 'boyolabs_global';
     const output = document.getElementById('chat-output');
     const input = document.getElementById('message-input');
-    document.getElementById('username-display').innerText = "Logged in as: " + MY_USER_ID;
+    document.getElementById('username-display').innerText = `@${currentUID}`;
 
-    // 3. LISTEN FOR MESSAGES
     pubnub.addListener({
         message: function(m) {
-            const isMe = m.publisher === MY_USER_ID;
+            const isMe = m.publisher === currentUID;
             const div = document.createElement('div');
             div.className = `msg ${isMe ? 'me' : 'them'}`;
             div.innerHTML = `<b>${m.publisher}</b>${m.message}`;
@@ -65,17 +91,14 @@
 
     pubnub.subscribe({ channels: [channel] });
 
-    // 4. SEND LOGIC
     function send() {
-        if (!input.value) return;
-        pubnub.publish({
-            channel: channel,
-            message: input.value
-        });
+        const val = input.value.trim();
+        if (!val) return;
+        pubnub.publish({ channel: channel, message: val });
         input.value = '';
+        input.focus();
     }
 
-    // Handle Enter Key
     input.addEventListener('keypress', (e) => { if(e.key === 'Enter') send(); });
 </script>
 
