@@ -42,12 +42,12 @@ This repo is dedicated to my single page web apps, programming and other scripti
 
 * server infomrational dashboard
 
-### PromptForge.html
+### PromptForge.html (abandoned)
 
 * was going to be a browser based markdown editor, but I didnt really like how it turned out so I abandoned it.
 * github.io link: https://boyolabs.github.io/main-dev/PromptForge.html
 
-### WarpCore.html
+### WarpCore.html (abandoned)
 
 * a very inaccurate benchmarking tool.
 * github.io link: https://boyolabs.github.io/main-dev/WarpCore.html
