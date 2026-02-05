@@ -6,6 +6,10 @@ This repo is dedicated to my single page web apps, programming and other scripti
 
 ## APPS LIST
 
+### tracker.html
+* just a fun way to stock-market-ify your cash flow -- uses local.storage, and can export/import JSON to save it to a different device.
+* https://boyolabs.github.io/main-dev/tracker.html
+
 ### danikaBday.html
 * another birthday blast
 * github.io link: https://boyolabs.github.io/main-dev/danikaBday.html
