@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cash Terminal</title>
+    <title>Cash Terminal | Live</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment"></script>
@@ -84,8 +84,8 @@
     </div>
 
     <div class="utils">
-        <span onclick="exportData()" style="cursor:pointer">💾 EXPORT</span> | 
-        <span onclick="document.getElementById('importFile').click()" style="cursor:pointer">📂 IMPORT</span>
+        <span onclick="exportData()" style="cursor:pointer">💾 EXPORT JSON</span> | 
+        <span onclick="document.getElementById('importFile').click()" style="cursor:pointer">📂 IMPORT JSON</span>
         <input type="file" id="importFile" style="display:none" onchange="importData(event)">
         | <span onclick="clearEverything()" style="cursor:pointer; color: var(--tv-red)">✖ RESET</span>
     </div>
@@ -97,18 +97,15 @@
     let chart;
     let currentFilter = 'ALL';
 
-    // 1. Initial Data Load
+    // Initial Data Load
     function loadData() {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
             rawData = JSON.parse(saved);
             document.getElementById('dbStatus').innerText = `● LOADED ${rawData.length} ENTRIES`;
-        } else {
-            document.getElementById('dbStatus').innerText = `● NEW DATABASE`;
         }
     }
 
-    // 2. Chart Initialization
     const ctx = document.getElementById('balanceChart').getContext('2d');
     const grad = ctx.createLinearGradient(0, 0, 0, 300);
     grad.addColorStop(0, 'rgba(8, 153, 129, 0.3)');
@@ -120,15 +117,19 @@
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: false, // Smoother updates for the "live" extension
             scales: {
-                x: { type: 'time', grid: { color: '#2a2e39' }, ticks: { color: '#787b86', font: { size: 10 } } },
+                x: { 
+                    type: 'time', 
+                    grid: { color: '#2a2e39' }, 
+                    ticks: { color: '#787b86', font: { size: 10 } }
+                },
                 y: { position: 'right', grid: { color: '#2a2e39' }, ticks: { color: '#787b86', font: { size: 10 } } }
             },
             plugins: { legend: { display: false } }
         }
     });
 
-    // 3. Logic Functions
     function modifyBalance(isAdd) {
         const input = document.getElementById('amountInput');
         const val = parseFloat(input.value);
@@ -138,7 +139,7 @@
         const entry = { x: new Date().toISOString(), y: isAdd ? last + val : last - val };
         
         rawData.push(entry);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(rawData)); // Save immediately
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(rawData));
         
         input.value = '';
         input.blur();
@@ -157,13 +158,25 @@
 
     function updateView(range) {
         currentFilter = range;
-        let filtered = [...rawData];
         const now = moment();
+        let filtered = [...rawData];
 
+        // 1. Filter Logic
         if (range === '1D') filtered = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(1, 'days')));
         else if (range === '1W') filtered = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(7, 'days')));
         else if (range === '1M') filtered = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(1, 'months')));
 
+        // 2. LIVE VIEW EXTENSION:
+        // Add a "phantom" point at current time using latest balance to stretch graph
+        if (filtered.length > 0) {
+            const currentBalance = filtered[filtered.length - 1].y;
+            filtered.push({
+                x: new Date().toISOString(),
+                y: currentBalance
+            });
+        }
+
+        // 3. Update Change Badge
         const displayChange = document.getElementById('changeValue');
         if (filtered.length > 1) {
             const startPrice = filtered[0].y;
@@ -175,12 +188,14 @@
             displayChange.className = `change-indicator ${diff >= 0 ? 'pos' : 'neg'}`;
         }
 
+        // 4. Chart Update with X-Axis Max pin
         chart.data.datasets[0].data = filtered;
+        chart.options.scales.x.max = new Date(); // Pins the right side of the graph to 'Now'
         chart.update();
+
         document.querySelectorAll('.btn-filter').forEach(btn => btn.classList.toggle('active', btn.innerText === range));
     }
 
-    // 4. Persistence Tools
     function exportData() {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(rawData));
         const dl = document.createElement('a');
@@ -194,22 +209,25 @@
         reader.onload = (ev) => { 
             rawData = JSON.parse(ev.target.result); 
             localStorage.setItem(STORAGE_KEY, JSON.stringify(rawData));
-            location.reload(); // Refresh to ensure everything updates
+            location.reload();
         };
         reader.readAsText(e.target.files[0]);
     }
 
     function clearEverything() {
-        if (confirm("Erase all data?")) {
+        if (confirm("Erase all history?")) {
             localStorage.removeItem(STORAGE_KEY);
             location.reload();
         }
     }
 
-    // Run on Start
+    // Auto-advance the graph every 30 seconds to keep it "live"
+    setInterval(() => {
+        if(rawData.length > 0) updateView(currentFilter);
+    }, 30000);
+
     loadData();
     renderUI();
 </script>
 </body>
 </html>
-
