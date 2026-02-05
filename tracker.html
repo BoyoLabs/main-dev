@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cash Terminal | Local</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment"></script>
+    <style>
+        :root {
+            --bg-color: #131722;
+            --card-bg: #1e222d;
+            --tv-green: #089981;
+            --tv-red: #f23645;
+            --text-main: #d1d4dc;
+            --grid-color: #2a2e39;
+            --blue-accent: #2962ff;
+        }
+
+        body { font-family: 'Trebuchet MS', sans-serif; background: var(--bg-color); color: var(--text-main); display: flex; justify-content: center; padding: 20px; margin: 0; }
+        .terminal-container { width: 100%; max-width: 900px; background: var(--card-bg); border: 1px solid var(--grid-color); border-radius: 4px; overflow: hidden; }
+        
+        /* Header & Price */
+        .header { padding: 15px 20px; border-bottom: 1px solid var(--grid-color); display: flex; justify-content: space-between; align-items: center; }
+        .price-large { font-size: 2.2rem; font-weight: bold; color: var(--tv-green); font-family: monospace; }
+        
+        /* Chart Section */
+        .chart-wrapper { padding: 10px; height: 400px; }
+
+        /* Controls */
+        .controls-grid { padding: 20px; background: #1e222d; border-top: 1px solid var(--grid-color); display: grid; grid-template-columns: 1fr auto auto; gap: 10px; }
+        input { background: #2a2e39; border: 1px solid #363a45; color: white; padding: 12px; border-radius: 4px; outline: none; font-size: 1rem; }
+        
+        button { padding: 10px 20px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; text-transform: uppercase; }
+        .btn-buy { background: var(--tv-green); color: white; }
+        .btn-sell { background: var(--tv-red); color: white; }
+        
+        /* Utilities Footer */
+        .utils { padding: 10px 20px; background: #131722; display: flex; gap: 15px; font-size: 0.7rem; border-top: 1px solid var(--grid-color); }
+        .utils label { cursor: pointer; color: var(--blue-accent); text-decoration: underline; }
+        
+        .time-filters { display: flex; background: #2a2e39; padding: 2px; border-radius: 4px; }
+        .btn-filter { background: transparent; border: none; color: #787b86; padding: 5px 12px; cursor: pointer; font-size: 0.75rem; }
+        .btn-filter.active { background: #363a45; color: var(--blue-accent); border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<div class="terminal-container">
+    <div class="header">
+        <div>
+            <div style="font-size: 0.8rem; color: #787b86;">LIQUID ASSETS / USD</div>
+            <div id="currentBalance" class="price-large">0.00</div>
+        </div>
+        <div class="time-filters">
+            <button class="btn-filter" onclick="updateView('1D')">1D</button>
+            <button class="btn-filter" onclick="updateView('1W')">1W</button>
+            <button class="btn-filter" onclick="updateView('1M')">1M</button>
+            <button class="btn-filter active" onclick="updateView('ALL')">ALL</button>
+        </div>
+    </div>
+
+    <div class="chart-wrapper">
+        <canvas id="balanceChart"></canvas>
+    </div>
+
+    <div class="controls-grid">
+        <input type="number" id="amountInput" placeholder="Transaction Amount..." step="0.01">
+        <button class="btn-buy" onclick="modifyBalance(true)">Deposit</button>
+        <button class="btn-sell" onclick="modifyBalance(false)">Withdraw</button>
+    </div>
+
+    <div class="utils">
+        <span onclick="exportData()" style="cursor:pointer; color: var(--text-main)">💾 Export JSON</span>
+        <label for="importFile">📂 Import JSON</label>
+        <input type="file" id="importFile" style="display:none" onchange="importData(event)">
+        <span onclick="clearAll()" style="color: var(--tv-red); cursor: pointer; margin-left: auto;">⚠️ Clear All</span>
+    </div>
+</div>
+
+<script>
+    let rawData = JSON.parse(localStorage.getItem('wallet_history')) || [];
+    let chart;
+
+    // Chart Setup
+    const ctx = document.getElementById('balanceChart').getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+    gradient.addColorStop(0, 'rgba(8, 153, 129, 0.3)');
+    gradient.addColorStop(1, 'rgba(8, 153, 129, 0)');
+
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [{
+                data: [],
+                borderColor: '#089981',
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: true,
+                backgroundColor: gradient,
+                tension: 0.2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { type: 'time', grid: { color: '#2a2e39' }, ticks: { color: '#787b86' } },
+                y: { position: 'right', grid: { color: '#2a2e39' }, ticks: { color: '#787b86' } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    function modifyBalance(isAdd) {
+        const val = parseFloat(document.getElementById('amountInput').value);
+        if (isNaN(val)) return;
+        const lastBal = rawData.length > 0 ? rawData[rawData.length - 1].y : 0;
+        rawData.push({ x: new Date().toISOString(), y: isAdd ? lastBal + val : lastBal - val });
+        saveAndRefresh();
+        document.getElementById('amountInput').value = '';
+    }
+
+    function saveAndRefresh() {
+        localStorage.setItem('wallet_history', JSON.stringify(rawData));
+        if (rawData.length > 0) {
+            document.getElementById('currentBalance').innerText = rawData[rawData.length - 1].y.toLocaleString(undefined, {minimumFractionDigits: 2});
+        }
+        updateView('ALL');
+    }
+
+    function updateView(range) {
+        let filteredData = [...rawData];
+        const now = moment();
+        if (range === '1D') filteredData = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(1, 'days')));
+        else if (range === '1W') filteredData = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(7, 'days')));
+        else if (range === '1M') filteredData = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(1, 'months')));
+        
+        chart.data.datasets[0].data = filteredData;
+        chart.update();
+        document.querySelectorAll('.btn-filter').forEach(btn => btn.classList.toggle('active', btn.innerText === range));
+    }
+
+    // JSON Handling
+    function exportData() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(rawData));
+        const dlAnchor = document.createElement('a');
+        dlAnchor.setAttribute("href", dataStr);
+        dlAnchor.setAttribute("download", "cash_backup.json");
+        dlAnchor.click();
+    }
+
+    function importData(event) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            rawData = JSON.parse(e.target.result);
+            saveAndRefresh();
+        };
+        reader.readAsText(event.target.files[0]);
+    }
+
+    function clearAll() {
+        if(confirm("Erase all history?")) {
+            rawData = [];
+            saveAndRefresh();
+        }
+    }
+
+    // Load initial data
+    saveAndRefresh();
+</script>
+</body>
+</html>
