@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Terminal | Cash Asset</title>
+    <title>Cash Terminal</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment"></script>
@@ -24,7 +24,6 @@
         
         .terminal-container { width: 100%; max-width: 800px; background: var(--card-bg); border: 1px solid var(--grid-color); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
 
-        /* Header */
         .header { padding: 20px; border-bottom: 1px solid var(--grid-color); display: flex; justify-content: space-between; align-items: center; }
         .price-row { display: flex; align-items: baseline; gap: 10px; }
         .price-large { font-size: 2.2rem; font-weight: bold; color: white; font-family: monospace; }
@@ -32,15 +31,12 @@
         .pos { color: var(--tv-green); }
         .neg { color: var(--tv-red); }
 
-        /* Chart */
         .chart-wrapper { padding: 10px; height: 350px; }
 
-        /* Filters */
         .time-filters { display: flex; background: #2a2e39; padding: 2px; border-radius: 4px; }
         .btn-filter { background: transparent; border: none; color: var(--text-dim); padding: 6px 10px; cursor: pointer; font-size: 0.7rem; font-weight: bold; }
         .btn-filter.active { background: #363a45; color: var(--blue-accent); border-radius: 3px; }
 
-        /* Controls */
         .controls-section { padding: 20px; border-top: 1px solid var(--grid-color); }
         .controls-grid { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; }
         input { background: #2a2e39; border: 1px solid #363a45; color: white; padding: 12px; border-radius: 6px; font-size: 16px; width: 100%; outline: none; }
@@ -48,13 +44,12 @@
         .btn-buy { background: var(--tv-green); color: white; }
         .btn-sell { background: var(--tv-red); color: white; }
 
-        /* Mobile */
+        .utils { padding: 10px; background: var(--bg-color); text-align: center; font-size: 0.7rem; color: var(--text-dim); border-top: 1px solid var(--grid-color); }
+
         @media (max-width: 600px) {
             .controls-grid { grid-template-columns: 1fr; }
             .header { flex-direction: column; align-items: flex-start; gap: 15px; }
         }
-
-        .utils { padding: 10px; background: var(--bg-color); text-align: center; font-size: 0.7rem; color: var(--text-dim); border-top: 1px solid var(--grid-color); }
     </style>
 </head>
 <body>
@@ -62,10 +57,10 @@
 <div class="terminal-container">
     <div class="header">
         <div>
-            <div style="font-size: 0.7rem; color: var(--text-dim); letter-spacing: 1px;">CASH / USD</div>
+            <div id="dbStatus" style="font-size: 0.6rem; color: var(--tv-green); margin-bottom: 4px;">● SYSTEM ONLINE</div>
             <div class="price-row">
                 <span id="currentBalance" class="price-large">0.00</span>
-                <span id="changeValue" class="change-indicator">+0.00%</span>
+                <span id="changeValue" class="change-indicator">+0%</span>
             </div>
         </div>
         <div class="time-filters">
@@ -92,14 +87,28 @@
         <span onclick="exportData()" style="cursor:pointer">💾 EXPORT</span> | 
         <span onclick="document.getElementById('importFile').click()" style="cursor:pointer">📂 IMPORT</span>
         <input type="file" id="importFile" style="display:none" onchange="importData(event)">
+        | <span onclick="clearEverything()" style="cursor:pointer; color: var(--tv-red)">✖ RESET</span>
     </div>
 </div>
 
 <script>
-    let rawData = JSON.parse(localStorage.getItem('cash_v3')) || [];
+    const STORAGE_KEY = 'cash_terminal_final_v1';
+    let rawData = [];
     let chart;
     let currentFilter = 'ALL';
 
+    // 1. Initial Data Load
+    function loadData() {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            rawData = JSON.parse(saved);
+            document.getElementById('dbStatus').innerText = `● LOADED ${rawData.length} ENTRIES`;
+        } else {
+            document.getElementById('dbStatus').innerText = `● NEW DATABASE`;
+        }
+    }
+
+    // 2. Chart Initialization
     const ctx = document.getElementById('balanceChart').getContext('2d');
     const grad = ctx.createLinearGradient(0, 0, 0, 300);
     grad.addColorStop(0, 'rgba(8, 153, 129, 0.3)');
@@ -119,20 +128,28 @@
         }
     });
 
+    // 3. Logic Functions
     function modifyBalance(isAdd) {
         const input = document.getElementById('amountInput');
         const val = parseFloat(input.value);
-        if (isNaN(val)) return;
+        if (isNaN(val) || val === 0) return;
+
         const last = rawData.length > 0 ? rawData[rawData.length - 1].y : 0;
-        rawData.push({ x: new Date().toISOString(), y: isAdd ? last + val : last - val });
-        localStorage.setItem('cash_v3', JSON.stringify(rawData));
+        const entry = { x: new Date().toISOString(), y: isAdd ? last + val : last - val };
+        
+        rawData.push(entry);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(rawData)); // Save immediately
+        
         input.value = '';
         input.blur();
-        refresh();
+        renderUI();
     }
 
-    function refresh() {
-        if (rawData.length === 0) return;
+    function renderUI() {
+        if (rawData.length === 0) {
+            document.getElementById('currentBalance').innerText = "0.00";
+            return;
+        }
         const latest = rawData[rawData.length - 1].y;
         document.getElementById('currentBalance').innerText = latest.toLocaleString(undefined, {minimumFractionDigits: 2});
         updateView(currentFilter);
@@ -147,16 +164,14 @@
         else if (range === '1W') filtered = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(7, 'days')));
         else if (range === '1M') filtered = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(1, 'months')));
 
-        // Calculate Change
         const displayChange = document.getElementById('changeValue');
         if (filtered.length > 1) {
             const startPrice = filtered[0].y;
             const endPrice = filtered[filtered.length - 1].y;
             const diff = endPrice - startPrice;
-            const pct = startPrice !== 0 ? ((diff / Math.abs(startPrice)) * 100).toFixed(2) : "0.00";
+            const pct = startPrice !== 0 ? ((diff / Math.abs(startPrice)) * 100).toFixed(1) : "0";
             const sign = diff >= 0 ? "+" : "";
-            
-            displayChange.innerText = `${sign}${diff.toFixed(2)} (${sign}${pct}%)`;
+            displayChange.innerText = `${sign}${pct}%`;
             displayChange.className = `change-indicator ${diff >= 0 ? 'pos' : 'neg'}`;
         }
 
@@ -165,21 +180,36 @@
         document.querySelectorAll('.btn-filter').forEach(btn => btn.classList.toggle('active', btn.innerText === range));
     }
 
+    // 4. Persistence Tools
     function exportData() {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(rawData));
         const dl = document.createElement('a');
         dl.setAttribute("href", dataStr);
-        dl.setAttribute("download", "cash_backup.json");
+        dl.setAttribute("download", `vault_backup_${new Date().toISOString().slice(0,10)}.json`);
         dl.click();
     }
 
     function importData(e) {
         const reader = new FileReader();
-        reader.onload = (ev) => { rawData = JSON.parse(ev.target.result); refresh(); };
+        reader.onload = (ev) => { 
+            rawData = JSON.parse(ev.target.result); 
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(rawData));
+            location.reload(); // Refresh to ensure everything updates
+        };
         reader.readAsText(e.target.files[0]);
     }
 
-    refresh();
+    function clearEverything() {
+        if (confirm("Erase all data?")) {
+            localStorage.removeItem(STORAGE_KEY);
+            location.reload();
+        }
+    }
+
+    // Run on Start
+    loadData();
+    renderUI();
 </script>
 </body>
 </html>
+
