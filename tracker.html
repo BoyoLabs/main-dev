@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cash Terminal</title>
+    <title>Terminal | Cash Asset</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment"></script>
     <style>
         :root {
-            --bg-color: #131722;      /* TradingView Background */
-            --card-bg: #1e222d;       /* TradingView Card */
-            --tv-green: #089981;      /* Bullish Green */
-            --tv-red: #f23645;        /* Bearish Red */
+            --bg-color: #131722;
+            --card-bg: #1e222d;
+            --tv-green: #089981;
+            --tv-red: #f23645;
             --text-main: #d1d4dc;
             --text-dim: #787b86;
             --grid-color: #2a2e39;
@@ -20,116 +20,41 @@
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-color); color: var(--text-main); margin: 0; padding: 10px; display: flex; justify-content: center; }
+        
+        .terminal-container { width: 100%; max-width: 800px; background: var(--card-bg); border: 1px solid var(--grid-color); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
 
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            background: var(--bg-color); 
-            color: var(--text-main); 
-            margin: 0; 
-            display: flex; 
-            justify-content: center;
-            padding: 10px;
-        }
-
-        .terminal-container { 
-            width: 100%; 
-            max-width: 800px; 
-            background: var(--card-bg); 
-            border: 1px solid var(--grid-color); 
-            border-radius: 8px; 
-            overflow: hidden; 
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Header & Balance */
-        .header { 
-            padding: 20px; 
-            border-bottom: 1px solid var(--grid-color); 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: flex-start; 
-        }
-
-        .ticker-label { font-size: 0.75rem; color: var(--text-dim); font-weight: bold; letter-spacing: 1px; }
-        .price-large { 
-            font-size: 2.2rem; 
-            font-weight: bold; 
-            color: var(--tv-green); 
-            font-family: 'Courier New', Courier, monospace;
-            margin-top: 5px;
-        }
-
-        /* Time Filters */
-        .time-filters { display: flex; background: #2a2e39; padding: 2px; border-radius: 4px; }
-        .btn-filter { 
-            background: transparent; border: none; color: var(--text-dim); 
-            padding: 6px 10px; cursor: pointer; font-size: 0.7rem; font-weight: bold;
-        }
-        .btn-filter.active { background: #363a45; color: var(--blue-accent); border-radius: 3px; }
+        /* Header */
+        .header { padding: 20px; border-bottom: 1px solid var(--grid-color); display: flex; justify-content: space-between; align-items: center; }
+        .price-row { display: flex; align-items: baseline; gap: 10px; }
+        .price-large { font-size: 2.2rem; font-weight: bold; color: white; font-family: monospace; }
+        .change-indicator { font-size: 0.9rem; font-weight: bold; padding: 2px 6px; border-radius: 4px; }
+        .pos { color: var(--tv-green); }
+        .neg { color: var(--tv-red); }
 
         /* Chart */
-        .chart-wrapper { padding: 10px; height: 350px; width: 100%; }
+        .chart-wrapper { padding: 10px; height: 350px; }
 
-        /* Inputs & Buttons - RESPONSIVE GRID */
-        .controls-section { 
-            padding: 20px; 
-            background: var(--card-bg); 
-            border-top: 1px solid var(--grid-color);
-        }
+        /* Filters */
+        .time-filters { display: flex; background: #2a2e39; padding: 2px; border-radius: 4px; }
+        .btn-filter { background: transparent; border: none; color: var(--text-dim); padding: 6px 10px; cursor: pointer; font-size: 0.7rem; font-weight: bold; }
+        .btn-filter.active { background: #363a45; color: var(--blue-accent); border-radius: 3px; }
 
-        .controls-grid {
-            display: grid;
-            grid-template-columns: 1fr auto auto; /* Desktop Default */
-            gap: 12px;
-        }
-
-        input { 
-            background: #2a2e39; 
-            border: 1px solid #363a45; 
-            color: white; 
-            padding: 12px; 
-            border-radius: 6px; 
-            outline: none; 
-            font-size: 16px; /* Prevents auto-zoom on mobile */
-            width: 100%;
-        }
-
-        button.action { 
-            padding: 12px 24px; 
-            border-radius: 6px; 
-            border: none; 
-            cursor: pointer; 
-            font-weight: bold; 
-            text-transform: uppercase;
-            font-size: 0.85rem;
-            transition: opacity 0.2s;
-        }
+        /* Controls */
+        .controls-section { padding: 20px; border-top: 1px solid var(--grid-color); }
+        .controls-grid { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; }
+        input { background: #2a2e39; border: 1px solid #363a45; color: white; padding: 12px; border-radius: 6px; font-size: 16px; width: 100%; outline: none; }
+        button.action { padding: 12px 24px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; text-transform: uppercase; font-size: 0.85rem; }
         .btn-buy { background: var(--tv-green); color: white; }
         .btn-sell { background: var(--tv-red); color: white; }
 
-        /* Bottom Menu */
-        .utils-bar { 
-            padding: 12px 20px; 
-            background: var(--bg-color); 
-            display: flex; 
-            gap: 20px; 
-            font-size: 0.7rem; 
-            border-top: 1px solid var(--grid-color);
-            justify-content: center;
-        }
-        .utils-bar span, .utils-bar label { color: var(--text-dim); cursor: pointer; text-decoration: none; }
-        .utils-bar span:hover { color: white; }
-
-        /* Mobile Adjustments */
+        /* Mobile */
         @media (max-width: 600px) {
-            .controls-grid {
-                grid-template-columns: 1fr; /* Stack vertically on mobile */
-            }
-            .header { flex-direction: column; gap: 15px; }
-            .price-large { font-size: 1.8rem; }
-            .chart-wrapper { height: 300px; }
+            .controls-grid { grid-template-columns: 1fr; }
+            .header { flex-direction: column; align-items: flex-start; gap: 15px; }
         }
+
+        .utils { padding: 10px; background: var(--bg-color); text-align: center; font-size: 0.7rem; color: var(--text-dim); border-top: 1px solid var(--grid-color); }
     </style>
 </head>
 <body>
@@ -137,8 +62,11 @@
 <div class="terminal-container">
     <div class="header">
         <div>
-            <div class="ticker-label">CASH ASSET / USD</div>
-            <div id="currentBalance" class="price-large">0.00</div>
+            <div style="font-size: 0.7rem; color: var(--text-dim); letter-spacing: 1px;">CASH / USD</div>
+            <div class="price-row">
+                <span id="currentBalance" class="price-large">0.00</span>
+                <span id="changeValue" class="change-indicator">+0.00%</span>
+            </div>
         </div>
         <div class="time-filters">
             <button class="btn-filter" onclick="updateView('1D')">1D</button>
@@ -154,58 +82,38 @@
 
     <div class="controls-section">
         <div class="controls-grid">
-            <input type="number" id="amountInput" placeholder="Enter Amount..." step="0.01" inputmode="decimal">
+            <input type="number" id="amountInput" placeholder="Amount..." inputmode="decimal">
             <button class="action btn-buy" onclick="modifyBalance(true)">Deposit</button>
             <button class="action btn-sell" onclick="modifyBalance(false)">Withdraw</button>
         </div>
     </div>
 
-    <div class="utils-bar">
-        <span onclick="exportData()">💾 EXPORT JSON</span>
-        <label for="importFile">📂 IMPORT JSON</label>
+    <div class="utils">
+        <span onclick="exportData()" style="cursor:pointer">💾 EXPORT</span> | 
+        <span onclick="document.getElementById('importFile').click()" style="cursor:pointer">📂 IMPORT</span>
         <input type="file" id="importFile" style="display:none" onchange="importData(event)">
-        <span onclick="clearHistory()" style="color: var(--tv-red)">✖ CLEAR ALL</span>
     </div>
 </div>
 
 <script>
-    let rawData = JSON.parse(localStorage.getItem('cash_history_v2')) || [];
+    let rawData = JSON.parse(localStorage.getItem('cash_v3')) || [];
     let chart;
     let currentFilter = 'ALL';
 
-    // Initialize Chart
     const ctx = document.getElementById('balanceChart').getContext('2d');
-    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-    gradient.addColorStop(0, 'rgba(8, 153, 129, 0.3)');
-    gradient.addColorStop(1, 'rgba(8, 153, 129, 0)');
+    const grad = ctx.createLinearGradient(0, 0, 0, 300);
+    grad.addColorStop(0, 'rgba(8, 153, 129, 0.3)');
+    grad.addColorStop(1, 'rgba(8, 153, 129, 0)');
 
     chart = new Chart(ctx, {
         type: 'line',
-        data: {
-            datasets: [{
-                data: [],
-                borderColor: '#089981',
-                borderWidth: 2,
-                pointRadius: 0,
-                fill: true,
-                backgroundColor: gradient,
-                tension: 0.15
-            }]
-        },
+        data: { datasets: [{ data: [], borderColor: '#089981', borderWidth: 2, pointRadius: 0, fill: true, backgroundColor: grad, tension: 0.1 }] },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                x: { 
-                    type: 'time', 
-                    grid: { color: '#2a2e39' }, 
-                    ticks: { color: '#787b86', font: { size: 10 } } 
-                },
-                y: { 
-                    position: 'right', 
-                    grid: { color: '#2a2e39' }, 
-                    ticks: { color: '#787b86', font: { size: 10 } } 
-                }
+                x: { type: 'time', grid: { color: '#2a2e39' }, ticks: { color: '#787b86', font: { size: 10 } } },
+                y: { position: 'right', grid: { color: '#2a2e39' }, ticks: { color: '#787b86', font: { size: 10 } } }
             },
             plugins: { legend: { display: false } }
         }
@@ -214,82 +122,64 @@
     function modifyBalance(isAdd) {
         const input = document.getElementById('amountInput');
         const val = parseFloat(input.value);
-        if (isNaN(val) || val <= 0) return;
-
-        const lastBal = rawData.length > 0 ? rawData[rawData.length - 1].y : 0;
-        const newEntry = {
-            x: new Date().toISOString(),
-            y: isAdd ? lastBal + val : lastBal - val
-        };
-
-        rawData.push(newEntry);
-        saveAndRefresh();
+        if (isNaN(val)) return;
+        const last = rawData.length > 0 ? rawData[rawData.length - 1].y : 0;
+        rawData.push({ x: new Date().toISOString(), y: isAdd ? last + val : last - val });
+        localStorage.setItem('cash_v3', JSON.stringify(rawData));
         input.value = '';
-        input.blur(); // Hide keyboard on mobile
+        input.blur();
+        refresh();
     }
 
-    function saveAndRefresh() {
-        localStorage.setItem('cash_history_v2', JSON.stringify(rawData));
-        
-        if (rawData.length > 0) {
-            const latest = rawData[rawData.length - 1].y;
-            document.getElementById('currentBalance').innerText = latest.toLocaleString(undefined, {minimumFractionDigits: 2});
-            document.getElementById('currentBalance').style.color = (latest >= 0) ? 'var(--tv-green)' : 'var(--tv-red)';
-        }
-        
+    function refresh() {
+        if (rawData.length === 0) return;
+        const latest = rawData[rawData.length - 1].y;
+        document.getElementById('currentBalance').innerText = latest.toLocaleString(undefined, {minimumFractionDigits: 2});
         updateView(currentFilter);
     }
 
     function updateView(range) {
         currentFilter = range;
-        let filteredData = [...rawData];
+        let filtered = [...rawData];
         const now = moment();
 
-        if (range === '1D') filteredData = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(1, 'days')));
-        else if (range === '1W') filteredData = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(7, 'days')));
-        else if (range === '1M') filteredData = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(1, 'months')));
-        
-        chart.data.datasets[0].data = filteredData;
-        chart.update();
+        if (range === '1D') filtered = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(1, 'days')));
+        else if (range === '1W') filtered = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(7, 'days')));
+        else if (range === '1M') filtered = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(1, 'months')));
 
-        document.querySelectorAll('.btn-filter').forEach(btn => {
-            btn.classList.toggle('active', btn.innerText === range);
-        });
+        // Calculate Change
+        const displayChange = document.getElementById('changeValue');
+        if (filtered.length > 1) {
+            const startPrice = filtered[0].y;
+            const endPrice = filtered[filtered.length - 1].y;
+            const diff = endPrice - startPrice;
+            const pct = startPrice !== 0 ? ((diff / Math.abs(startPrice)) * 100).toFixed(2) : "0.00";
+            const sign = diff >= 0 ? "+" : "";
+            
+            displayChange.innerText = `${sign}${diff.toFixed(2)} (${sign}${pct}%)`;
+            displayChange.className = `change-indicator ${diff >= 0 ? 'pos' : 'neg'}`;
+        }
+
+        chart.data.datasets[0].data = filtered;
+        chart.update();
+        document.querySelectorAll('.btn-filter').forEach(btn => btn.classList.toggle('active', btn.innerText === range));
     }
 
     function exportData() {
-        if (rawData.length === 0) return alert("No data to export");
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(rawData));
         const dl = document.createElement('a');
         dl.setAttribute("href", dataStr);
-        dl.setAttribute("download", `cash_history_${new Date().toISOString().slice(0,10)}.json`);
+        dl.setAttribute("download", "cash_backup.json");
         dl.click();
     }
 
-    function importData(event) {
+    function importData(e) {
         const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const imported = JSON.parse(e.target.result);
-                if (Array.isArray(imported)) {
-                    rawData = imported;
-                    saveAndRefresh();
-                }
-            } catch (err) { alert("Invalid JSON file"); }
-        };
-        reader.readAsText(event.target.files[0]);
+        reader.onload = (ev) => { rawData = JSON.parse(ev.target.result); refresh(); };
+        reader.readAsText(e.target.files[0]);
     }
 
-    function clearHistory() {
-        if (confirm("Permanently erase all history? This cannot be undone.")) {
-            rawData = [];
-            localStorage.removeItem('cash_history_v2');
-            location.reload();
-        }
-    }
-
-    // Initial load
-    saveAndRefresh();
+    refresh();
 </script>
 </body>
 </html>
