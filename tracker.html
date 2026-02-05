@@ -2,47 +2,134 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cash Terminal | Local</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cash Terminal</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment"></script>
     <style>
         :root {
-            --bg-color: #131722;
-            --card-bg: #1e222d;
-            --tv-green: #089981;
-            --tv-red: #f23645;
+            --bg-color: #131722;      /* TradingView Background */
+            --card-bg: #1e222d;       /* TradingView Card */
+            --tv-green: #089981;      /* Bullish Green */
+            --tv-red: #f23645;        /* Bearish Red */
             --text-main: #d1d4dc;
+            --text-dim: #787b86;
             --grid-color: #2a2e39;
             --blue-accent: #2962ff;
         }
 
-        body { font-family: 'Trebuchet MS', sans-serif; background: var(--bg-color); color: var(--text-main); display: flex; justify-content: center; padding: 20px; margin: 0; }
-        .terminal-container { width: 100%; max-width: 900px; background: var(--card-bg); border: 1px solid var(--grid-color); border-radius: 4px; overflow: hidden; }
-        
-        /* Header & Price */
-        .header { padding: 15px 20px; border-bottom: 1px solid var(--grid-color); display: flex; justify-content: space-between; align-items: center; }
-        .price-large { font-size: 2.2rem; font-weight: bold; color: var(--tv-green); font-family: monospace; }
-        
-        /* Chart Section */
-        .chart-wrapper { padding: 10px; height: 400px; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-        /* Controls */
-        .controls-grid { padding: 20px; background: #1e222d; border-top: 1px solid var(--grid-color); display: grid; grid-template-columns: 1fr auto auto; gap: 10px; }
-        input { background: #2a2e39; border: 1px solid #363a45; color: white; padding: 12px; border-radius: 4px; outline: none; font-size: 1rem; }
-        
-        button { padding: 10px 20px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; text-transform: uppercase; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background: var(--bg-color); 
+            color: var(--text-main); 
+            margin: 0; 
+            display: flex; 
+            justify-content: center;
+            padding: 10px;
+        }
+
+        .terminal-container { 
+            width: 100%; 
+            max-width: 800px; 
+            background: var(--card-bg); 
+            border: 1px solid var(--grid-color); 
+            border-radius: 8px; 
+            overflow: hidden; 
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header & Balance */
+        .header { 
+            padding: 20px; 
+            border-bottom: 1px solid var(--grid-color); 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: flex-start; 
+        }
+
+        .ticker-label { font-size: 0.75rem; color: var(--text-dim); font-weight: bold; letter-spacing: 1px; }
+        .price-large { 
+            font-size: 2.2rem; 
+            font-weight: bold; 
+            color: var(--tv-green); 
+            font-family: 'Courier New', Courier, monospace;
+            margin-top: 5px;
+        }
+
+        /* Time Filters */
+        .time-filters { display: flex; background: #2a2e39; padding: 2px; border-radius: 4px; }
+        .btn-filter { 
+            background: transparent; border: none; color: var(--text-dim); 
+            padding: 6px 10px; cursor: pointer; font-size: 0.7rem; font-weight: bold;
+        }
+        .btn-filter.active { background: #363a45; color: var(--blue-accent); border-radius: 3px; }
+
+        /* Chart */
+        .chart-wrapper { padding: 10px; height: 350px; width: 100%; }
+
+        /* Inputs & Buttons - RESPONSIVE GRID */
+        .controls-section { 
+            padding: 20px; 
+            background: var(--card-bg); 
+            border-top: 1px solid var(--grid-color);
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr auto auto; /* Desktop Default */
+            gap: 12px;
+        }
+
+        input { 
+            background: #2a2e39; 
+            border: 1px solid #363a45; 
+            color: white; 
+            padding: 12px; 
+            border-radius: 6px; 
+            outline: none; 
+            font-size: 16px; /* Prevents auto-zoom on mobile */
+            width: 100%;
+        }
+
+        button.action { 
+            padding: 12px 24px; 
+            border-radius: 6px; 
+            border: none; 
+            cursor: pointer; 
+            font-weight: bold; 
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            transition: opacity 0.2s;
+        }
         .btn-buy { background: var(--tv-green); color: white; }
         .btn-sell { background: var(--tv-red); color: white; }
-        
-        /* Utilities Footer */
-        .utils { padding: 10px 20px; background: #131722; display: flex; gap: 15px; font-size: 0.7rem; border-top: 1px solid var(--grid-color); }
-        .utils label { cursor: pointer; color: var(--blue-accent); text-decoration: underline; }
-        
-        .time-filters { display: flex; background: #2a2e39; padding: 2px; border-radius: 4px; }
-        .btn-filter { background: transparent; border: none; color: #787b86; padding: 5px 12px; cursor: pointer; font-size: 0.75rem; }
-        .btn-filter.active { background: #363a45; color: var(--blue-accent); border-radius: 3px; }
+
+        /* Bottom Menu */
+        .utils-bar { 
+            padding: 12px 20px; 
+            background: var(--bg-color); 
+            display: flex; 
+            gap: 20px; 
+            font-size: 0.7rem; 
+            border-top: 1px solid var(--grid-color);
+            justify-content: center;
+        }
+        .utils-bar span, .utils-bar label { color: var(--text-dim); cursor: pointer; text-decoration: none; }
+        .utils-bar span:hover { color: white; }
+
+        /* Mobile Adjustments */
+        @media (max-width: 600px) {
+            .controls-grid {
+                grid-template-columns: 1fr; /* Stack vertically on mobile */
+            }
+            .header { flex-direction: column; gap: 15px; }
+            .price-large { font-size: 1.8rem; }
+            .chart-wrapper { height: 300px; }
+        }
     </style>
 </head>
 <body>
@@ -50,7 +137,7 @@
 <div class="terminal-container">
     <div class="header">
         <div>
-            <div style="font-size: 0.8rem; color: #787b86;">LIQUID ASSETS / USD</div>
+            <div class="ticker-label">CASH ASSET / USD</div>
             <div id="currentBalance" class="price-large">0.00</div>
         </div>
         <div class="time-filters">
@@ -65,27 +152,30 @@
         <canvas id="balanceChart"></canvas>
     </div>
 
-    <div class="controls-grid">
-        <input type="number" id="amountInput" placeholder="Transaction Amount..." step="0.01">
-        <button class="btn-buy" onclick="modifyBalance(true)">Deposit</button>
-        <button class="btn-sell" onclick="modifyBalance(false)">Withdraw</button>
+    <div class="controls-section">
+        <div class="controls-grid">
+            <input type="number" id="amountInput" placeholder="Enter Amount..." step="0.01" inputmode="decimal">
+            <button class="action btn-buy" onclick="modifyBalance(true)">Deposit</button>
+            <button class="action btn-sell" onclick="modifyBalance(false)">Withdraw</button>
+        </div>
     </div>
 
-    <div class="utils">
-        <span onclick="exportData()" style="cursor:pointer; color: var(--text-main)">💾 Export JSON</span>
-        <label for="importFile">📂 Import JSON</label>
+    <div class="utils-bar">
+        <span onclick="exportData()">💾 EXPORT JSON</span>
+        <label for="importFile">📂 IMPORT JSON</label>
         <input type="file" id="importFile" style="display:none" onchange="importData(event)">
-        <span onclick="clearAll()" style="color: var(--tv-red); cursor: pointer; margin-left: auto;">⚠️ Clear All</span>
+        <span onclick="clearHistory()" style="color: var(--tv-red)">✖ CLEAR ALL</span>
     </div>
 </div>
 
 <script>
-    let rawData = JSON.parse(localStorage.getItem('wallet_history')) || [];
+    let rawData = JSON.parse(localStorage.getItem('cash_history_v2')) || [];
     let chart;
+    let currentFilter = 'ALL';
 
-    // Chart Setup
+    // Initialize Chart
     const ctx = document.getElementById('balanceChart').getContext('2d');
-    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
     gradient.addColorStop(0, 'rgba(8, 153, 129, 0.3)');
     gradient.addColorStop(1, 'rgba(8, 153, 129, 0)');
 
@@ -99,75 +189,106 @@
                 pointRadius: 0,
                 fill: true,
                 backgroundColor: gradient,
-                tension: 0.2
+                tension: 0.15
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                x: { type: 'time', grid: { color: '#2a2e39' }, ticks: { color: '#787b86' } },
-                y: { position: 'right', grid: { color: '#2a2e39' }, ticks: { color: '#787b86' } }
+                x: { 
+                    type: 'time', 
+                    grid: { color: '#2a2e39' }, 
+                    ticks: { color: '#787b86', font: { size: 10 } } 
+                },
+                y: { 
+                    position: 'right', 
+                    grid: { color: '#2a2e39' }, 
+                    ticks: { color: '#787b86', font: { size: 10 } } 
+                }
             },
             plugins: { legend: { display: false } }
         }
     });
 
     function modifyBalance(isAdd) {
-        const val = parseFloat(document.getElementById('amountInput').value);
-        if (isNaN(val)) return;
+        const input = document.getElementById('amountInput');
+        const val = parseFloat(input.value);
+        if (isNaN(val) || val <= 0) return;
+
         const lastBal = rawData.length > 0 ? rawData[rawData.length - 1].y : 0;
-        rawData.push({ x: new Date().toISOString(), y: isAdd ? lastBal + val : lastBal - val });
+        const newEntry = {
+            x: new Date().toISOString(),
+            y: isAdd ? lastBal + val : lastBal - val
+        };
+
+        rawData.push(newEntry);
         saveAndRefresh();
-        document.getElementById('amountInput').value = '';
+        input.value = '';
+        input.blur(); // Hide keyboard on mobile
     }
 
     function saveAndRefresh() {
-        localStorage.setItem('wallet_history', JSON.stringify(rawData));
+        localStorage.setItem('cash_history_v2', JSON.stringify(rawData));
+        
         if (rawData.length > 0) {
-            document.getElementById('currentBalance').innerText = rawData[rawData.length - 1].y.toLocaleString(undefined, {minimumFractionDigits: 2});
+            const latest = rawData[rawData.length - 1].y;
+            document.getElementById('currentBalance').innerText = latest.toLocaleString(undefined, {minimumFractionDigits: 2});
+            document.getElementById('currentBalance').style.color = (latest >= 0) ? 'var(--tv-green)' : 'var(--tv-red)';
         }
-        updateView('ALL');
+        
+        updateView(currentFilter);
     }
 
     function updateView(range) {
+        currentFilter = range;
         let filteredData = [...rawData];
         const now = moment();
+
         if (range === '1D') filteredData = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(1, 'days')));
         else if (range === '1W') filteredData = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(7, 'days')));
         else if (range === '1M') filteredData = rawData.filter(d => moment(d.x).isAfter(now.clone().subtract(1, 'months')));
         
         chart.data.datasets[0].data = filteredData;
         chart.update();
-        document.querySelectorAll('.btn-filter').forEach(btn => btn.classList.toggle('active', btn.innerText === range));
+
+        document.querySelectorAll('.btn-filter').forEach(btn => {
+            btn.classList.toggle('active', btn.innerText === range);
+        });
     }
 
-    // JSON Handling
     function exportData() {
+        if (rawData.length === 0) return alert("No data to export");
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(rawData));
-        const dlAnchor = document.createElement('a');
-        dlAnchor.setAttribute("href", dataStr);
-        dlAnchor.setAttribute("download", "cash_backup.json");
-        dlAnchor.click();
+        const dl = document.createElement('a');
+        dl.setAttribute("href", dataStr);
+        dl.setAttribute("download", `cash_history_${new Date().toISOString().slice(0,10)}.json`);
+        dl.click();
     }
 
     function importData(event) {
         const reader = new FileReader();
         reader.onload = (e) => {
-            rawData = JSON.parse(e.target.result);
-            saveAndRefresh();
+            try {
+                const imported = JSON.parse(e.target.result);
+                if (Array.isArray(imported)) {
+                    rawData = imported;
+                    saveAndRefresh();
+                }
+            } catch (err) { alert("Invalid JSON file"); }
         };
         reader.readAsText(event.target.files[0]);
     }
 
-    function clearAll() {
-        if(confirm("Erase all history?")) {
+    function clearHistory() {
+        if (confirm("Permanently erase all history? This cannot be undone.")) {
             rawData = [];
-            saveAndRefresh();
+            localStorage.removeItem('cash_history_v2');
+            location.reload();
         }
     }
 
-    // Load initial data
+    // Initial load
     saveAndRefresh();
 </script>
 </body>
