@@ -6,6 +6,10 @@ This repo is dedicated to my single page web apps, programming and other scripti
 
 ## APPS LIST
 
+### void-slayer.html (WIP)
+* peer-to-peer persistent text based MMORPG in browser. Not all the features are working yet, and if there is nobody online, your progress will be lost. I intend on adding a third device and leaving the game open 24/7 to keep the game persistent, but that is not the focus yet since its still very much WIP. Having troubles getting all the features working.
+* github.io link: https://boyolabs.github.io/main-dev/void-slayer.html
+
 ### tracker.html
 * just a fun way to stock-market-ify your cash flow -- uses local.storage, and can export/import JSON to save it to a different device.
 * github.io link: https://boyolabs.github.io/main-dev/tracker.html
