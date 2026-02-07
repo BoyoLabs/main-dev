@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>VOID-SLAYER | Final P2P Fix</title>
+    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
+    <style>
+        :root { --bg: #050508; --panel: #111116; --accent: #8b0000; --gold: #d4af37; --text: #aaa; --admin: #ff00ff; }
+        body { background: var(--bg); color: var(--text); font-family: 'Crimson Text', serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        nav { width: 220px; background: var(--panel); border-right: 1px solid #222; display: flex; flex-direction: column; padding: 20px; }
+        .nav-link { color: #666; padding: 12px 10px; border-bottom: 1px solid #1a1a1a; cursor: pointer; transition: 0.2s; font-size: 0.95rem; }
+        .nav-link:hover { color: #fff; background: #1a1a1f; padding-left: 15px; }
+        main { flex: 1; display: flex; flex-direction: column; }
+        #stats-bar { background: #000; padding: 15px 30px; border-bottom: 1px solid #222; display: flex; gap: 40px; font-family: monospace; font-size: 0.9rem; align-items: center; }
+        .stat-val { color: var(--gold); font-weight: bold; }
+        .content { flex: 1; padding: 40px; overflow-y: auto; background: radial-gradient(circle at top, #16161d 0%, #050508 100%); }
+        .card { background: rgba(20, 20, 25, 0.98); border: 1px solid #333; padding: 25px; margin-bottom: 20px; }
+        .action-btn { background: #222; border: 1px solid #444; color: #ccc; padding: 12px 24px; cursor: pointer; text-transform: uppercase; margin: 5px; font-family: inherit; }
+        .action-btn:hover { background: var(--accent); color: white; border-color: red; }
+        #game-log { height: 160px; overflow-y: auto; border-top: 1px solid #222; padding-top: 10px; font-size: 0.85rem; color: #888; margin-top: 20px; }
+        #auth-screen { position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+        input, select { background: #111; border: 1px solid #333; color: white; padding: 12px; margin-bottom: 12px; width: 260px; }
+        .hidden { display: none; }
+        .debug { font-size: 0.75rem; color: #555; margin-top: 10px; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+<div id="auth-screen">
+    <h1 style="color:var(--accent); letter-spacing: 5px;">VOID-SLAYER</h1>
+    <div class="card" style="max-width: 500px; text-align: center; margin-bottom: 20px;">
+        <p style="color: var(--gold); margin: 0;">
+            🌐 <strong>SHARED PUBLIC REALM</strong><br>
+            <span style="font-size: 0.9rem; color: #888;">
+                All data is public and shared across all players.<br>
+                Works in same browser via localStorage sync.
+            </span>
+        </p>
+    </div>
+    <div class="card" style="display:flex; flex-direction:column; align-items:center;">
+        <input type="text" id="alias" placeholder="Username">
+        <input type="password" id="pass" placeholder="Password (for login only)">
+        <select id="race-sel">
+            <option value="Hollow">Hollow (+Str)</option>
+            <option value="Wraith">Wraith (+Wis)</option>
+        </select>
+        <button class="action-btn" onclick="login()">Enter the Void</button>
+    </div>
+</div>
+
+<nav>
+    <h2 style="color:var(--accent)">VOID MENU</h2>
+    <div class="nav-link" onclick="showTab('grind')">The Frontier</div>
+    <div id="nav-dungeon" class="nav-link" onclick="showTab('dungeon')">The Void Gate</div>
+    <div class="nav-link" onclick="showTab('lead'); loadLeaderboard();">Leaderboard</div>
+    <div class="nav-link" onclick="showTab('shop'); refreshShop();">Black Market</div>
+    <div class="nav-link" onclick="showTab('chat')">Tavern</div>
+</nav>
+
+<main>
+    <div id="stats-bar">
+        <span>LVL: <span id="s-lvl" class="stat-val">1</span></span>
+        <span>HP: <span id="s-hp" class="stat-val">100/100</span></span>
+        <span>GOLD: <span id="s-gold" class="stat-val">0</span></span>
+        <span>NAME: <span id="s-name" class="stat-val">---</span></span>
+    </div>
+
+    <div class="content">
+        <div id="admin-controls" class="hidden card" style="border: 2px dashed var(--admin);">
+            <h4 style="color:var(--admin); margin:0 0 10px 0;">ADMIN: VOID MASTER</h4>
+            <button class="action-btn" onclick="spawnBoss()">SPAWN BOSS</button>
+            <button class="action-btn" onclick="closeBoss()">CLOSE GATE</button>
+        </div>
+
+        <section id="tab-grind">
+            <div class="card">
+                <h3 style="color:var(--accent); margin-top:0;">The Frontier</h3>
+                <button class="action-btn" onclick="grind()">Slay Creature</button>
+                <button class="action-btn" onclick="rest()">Rest</button>
+            </div>
+            <div id="game-log"></div>
+        </section>
+
+        <section id="tab-lead" class="hidden">
+            <div class="card">
+                <h3>Hall of Souls</h3>
+                <button class="action-btn" onclick="loadLeaderboard()" style="margin-bottom:15px;">🔄 Refresh</button>
+                <div id="my-rank" style="color:var(--gold); margin-bottom:15px; font-weight:bold;">Your rank: --</div>
+                <div id="leaderboard-list"></div>
+                <div class="debug" id="lb-debug"></div>
+            </div>
+        </section>
+
+        <section id="tab-shop" class="hidden"><div class="card"><h3>Black Market</h3><div id="shop-items"></div></div></section>
+        <section id="tab-dungeon" class="hidden">
+            <div class="card">
+                <h3>Void Gate</h3>
+                <p id="d-desc">The gate is currently sealed.</p>
+                <div id="boss-ui" class="hidden">
+                    <button class="action-btn" style="border-color:var(--admin)" onclick="fightBoss()">Fight Horror</button>
+                </div>
+            </div>
+        </section>
+        <section id="tab-chat" class="hidden">
+            <div class="card">
+                <h3>The Tavern</h3>
+                <div id="chat-box" style="height:200px; overflow-y:auto; background:#000; padding:10px; margin-bottom:10px;"></div>
+                <input id="chat-in" style="width:70%;" onkeypress="if(event.key==='Enter')sendChat()">
+                <button class="action-btn" onclick="sendChat()">Send</button>
+                <div class="debug" id="chat-debug"></div>
+            </div>
+        </section>
+    </div>
+</main>
+
+<script>
+    // SINGLE SHARED GUN INSTANCE - ALL DATA PUBLIC
+    const gun = Gun({
+        localStorage: true,
+        radisk: true
+    });
+    
+    const ADMIN = "boyo1991";
+    const REALM = 'VOID_REALM'; // Single shared namespace
+    
+    let currentUser = null;
+    let p = { lvl:1, xp:0, gold:0, hp:100, mhp:100, str:10, wis:10, race:'Hollow', weap:'None' };
+
+    function login() {
+        const alias = document.getElementById('alias').value.trim();
+        const pass = document.getElementById('pass').value;
+        
+        if (!alias) {
+            alert("Please enter a username");
+            return;
+        }
+        
+        currentUser = alias;
+        document.getElementById('auth-screen').style.display = 'none';
+        document.getElementById('s-name').innerText = alias;
+        
+        if(alias === ADMIN) {
+            document.getElementById('admin-controls').classList.remove('hidden');
+        }
+        
+        initGame();
+    }
+
+    function initGame() {
+        console.log('🎮 Initializing game for:', currentUser);
+        
+        // Load player data from PUBLIC shared space
+        gun.get(REALM).get('players').get(currentUser).once((data) => {
+            if (data) {
+                console.log('📦 Loading existing player:', data);
+                Object.keys(p).forEach(k => {
+                    if (data[k] !== undefined) p[k] = data[k];
+                });
+            } else {
+                console.log('✨ New player created');
+                p.race = document.getElementById('race-sel').value;
+                p.str = p.race === 'Hollow' ? 15 : 10;
+                p.wis = p.race === 'Wraith' ? 15 : 10;
+            }
+            refreshUI();
+            save();
+        });
+
+        // Listen to gate state changes
+        gun.get(REALM).get('gate').on((state) => {
+            console.log('🌀 Gate state:', state);
+            updateGateUI(state);
+        });
+
+        // Listen to chat messages
+        let seenChats = new Set();
+        gun.get(REALM).get('chat').map().on((msg, id) => {
+            if (msg && msg.text && msg.from && !seenChats.has(id)) {
+                seenChats.add(id);
+                displayChat(msg);
+                console.log('💬 Chat:', msg);
+            }
+        });
+
+        // Heartbeat - announce presence every 2 seconds
+        setInterval(() => {
+            gun.get(REALM).get('players').get(currentUser).put({
+                name: currentUser,
+                lvl: Number(p.lvl),
+                gold: Number(p.gold),
+                hp: Number(p.hp),
+                mhp: Number(p.mhp),
+                str: Number(p.str),
+                wis: Number(p.wis),
+                race: p.race,
+                weap: p.weap,
+                lastSeen: Date.now()
+            });
+        }, 2000);
+
+        // Auto-load leaderboard
+        loadLeaderboard();
+        setInterval(loadLeaderboard, 5000);
+    }
+
+    function updateGateUI(state) {
+        const nav = document.getElementById('nav-dungeon');
+        const ui = document.getElementById('boss-ui');
+        const desc = document.getElementById('d-desc');
+        
+        if(state === "OPEN") {
+            nav.style.color = "#ff00ff";
+            nav.style.fontWeight = "bold";
+            ui.classList.remove('hidden');
+            desc.innerText = "⚠️ THE VOID MASTER HAS OPENED THE GATE! ⚠️";
+        } else {
+            nav.style.color = "";
+            nav.style.fontWeight = "normal";
+            ui.classList.add('hidden');
+            desc.innerText = "The gate is currently sealed.";
+        }
+    }
+
+    function displayChat(msg) {
+        const cb = document.getElementById('chat-box');
+        if (!cb) return;
+        
+        const div = document.createElement('div');
+        div.style.marginBottom = '5px';
+        
+        if (msg.from === 'SYSTEM') {
+            div.innerHTML = `<b style="color:var(--admin)">[SYSTEM]</b> ${msg.text}`;
+        } else {
+            div.innerHTML = `<b style="color:#4a9eff">${msg.from}:</b> <span style="color:#ddd">${msg.text}</span>`;
+        }
+        
+        cb.appendChild(div);
+        cb.scrollTop = cb.scrollHeight;
+        
+        while (cb.children.length > 50) {
+            cb.removeChild(cb.firstChild);
+        }
+    }
+
+    function grind() {
+        if(p.hp <= 15) {
+            addLog("<span style='color:red'>Too injured. Rest first.</span>");
+            return;
+        }
+        
+        const dmg = Math.max(3, Math.floor(Math.random() * 8) - Math.floor(p.str/10));
+        const gainGold = Math.floor(Math.random() * 15) + 5;
+        const gainXp = 35 + (p.lvl * 5);
+
+        p.hp = Math.max(0, p.hp - dmg);
+        p.gold += gainGold;
+        p.xp += gainXp;
+        
+        if(p.xp >= p.lvl * 200) {
+            p.lvl++;
+            p.xp = 0;
+            p.mhp += 25;
+            p.hp = p.mhp;
+            p.str += 2;
+            addLog("<b style='color:lime'>⚡ LEVEL UP! ⚡</b>");
+        }
+        
+        addLog(`Slayed Beast. <span style='color:gold'>+${gainGold}g</span> | +${gainXp}xp | <span style='color:red'>-${dmg}hp</span>`);
+        refreshUI();
+        save();
+    }
+
+    function rest() {
+        p.hp = p.mhp;
+        refreshUI();
+        save();
+        addLog("<span style='color:cyan'>✨ Fully healed.</span>");
+    }
+
+    function save() {
+        gun.get(REALM).get('players').get(currentUser).put({
+            name: currentUser,
+            lvl: Number(p.lvl),
+            gold: Number(p.gold),
+            hp: Number(p.hp),
+            mhp: Number(p.mhp),
+            str: Number(p.str),
+            wis: Number(p.wis),
+            race: p.race,
+            weap: p.weap,
+            lastSeen: Date.now()
+        });
+        console.log('💾 Saved:', currentUser, p);
+    }
+
+    function refreshUI() {
+        document.getElementById('s-lvl').innerText = p.lvl;
+        document.getElementById('s-hp').innerText = `${Math.floor(p.hp)}/${p.mhp}`;
+        document.getElementById('s-gold').innerText = p.gold;
+    }
+
+    function spawnBoss() {
+        gun.get(REALM).get('gate').put("OPEN");
+        sendSystemChat("🌀 THE VOID MASTER HAS OPENED THE GATE! 🌀");
+        addLog("<span style='color:var(--admin)'>Gate OPENED</span>");
+    }
+
+    function closeBoss() {
+        gun.get(REALM).get('gate').put("CLOSED");
+        sendSystemChat("🌀 THE VOID MASTER HAS CLOSED THE GATE! 🌀");
+        addLog("<span style='color:var(--admin)'>Gate CLOSED</span>");
+    }
+
+    function loadLeaderboard() {
+        const list = document.getElementById('leaderboard-list');
+        const debug = document.getElementById('lb-debug');
+        
+        let players = {};
+        let count = 0;
+        
+        gun.get(REALM).get('players').map().once((data, key) => {
+            if (data && data.name) {
+                count++;
+                players[data.name] = {
+                    name: data.name,
+                    lvl: Number(data.lvl) || 1,
+                    gold: Number(data.gold) || 0,
+                    lastSeen: data.lastSeen || 0
+                };
+                console.log('👤 Found player:', data.name, data);
+            }
+        });
+        
+        setTimeout(() => {
+            debug.innerText = `Found ${count} player(s) in database`;
+            
+            const sorted = Object.values(players).sort((a, b) => {
+                if (b.lvl !== a.lvl) return b.lvl - a.lvl;
+                return b.gold - a.gold;
+            });
+            
+            if (sorted.length === 0) {
+                list.innerHTML = '<div>No players found</div>';
+                return;
+            }
+            
+            list.innerHTML = sorted.map((pl, i) => {
+                const isAdmin = pl.name === ADMIN ? '<span style="color:var(--admin)">(Void Master)</span>' : '';
+                const isYou = pl.name === currentUser ? '<span style="color:var(--gold)"> ← YOU</span>' : '';
+                const online = (Date.now() - pl.lastSeen < 5000) ? '🟢' : '⚫';
+                return `<div style="padding:8px; border-bottom:1px solid #222;">
+                    ${online} ${i+1}. <b>${pl.name}</b> ${isAdmin}${isYou} - Lvl ${pl.lvl} | ${pl.gold}g
+                </div>`;
+            }).join("");
+            
+            const myRank = sorted.findIndex(pl => pl.name === currentUser) + 1;
+            document.getElementById('my-rank').innerText = myRank > 0 
+                ? `⚔️ YOUR RANK: #${myRank} of ${sorted.length}` 
+                : 'Not ranked yet';
+        }, 1000);
+    }
+
+    function refreshShop() {
+        const cont = document.getElementById('shop-items');
+        cont.innerHTML = "";
+        const rarities = [
+            {n:'Common', m:1},
+            {n:'Rare', m:3},
+            {n:'Epic', m:5},
+            {n:'Legendary', m:10}
+        ];
+        
+        rarities.forEach(r => {
+            const cost = Math.floor(p.lvl * 100 * r.m);
+            const power = Math.floor(p.lvl * 5 * r.m);
+            const name = `${r.n} Artifact`;
+            
+            cont.innerHTML += `<div class="card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span><b>[${r.n}]</b> ${name} <span style="color:lime">(+${power} STR)</span></span>
+                <button class="action-btn" onclick="buy(${cost}, ${power}, '${name}')">${cost}g</button>
+            </div>`;
+        });
+    }
+
+    function buy(c, pw, n) {
+        if(p.gold >= c) {
+            p.gold -= c;
+            p.str += pw;
+            p.weap = n;
+            addLog(`<span style='color:lime'>Purchased: ${n}</span>`);
+            refreshUI();
+            save();
+            refreshShop();
+        } else {
+            addLog("<span style='color:red'>Not enough gold!</span>");
+        }
+    }
+
+    function fightBoss() {
+        if (p.hp < 50) {
+            addLog("<span style='color:red'>You need at least 50 HP!</span>");
+            return;
+        }
+        
+        const dmg = Math.floor(Math.random() * 30) + 20;
+        const reward = Math.floor(p.lvl * 50) + 100;
+        
+        p.hp = Math.max(0, p.hp - dmg);
+        p.gold += reward;
+        p.xp += 200;
+        
+        addLog(`<span style='color:var(--admin)'>⚡ Battled Horror! +${reward}g, +200xp | -${dmg}hp</span>`);
+        sendSystemChat(`${currentUser} has challenged the Horror!`);
+        
+        refreshUI();
+        save();
+    }
+
+    function sendChat() {
+        const input = document.getElementById('chat-in');
+        const text = input.value.trim();
+        if (!text) return;
+        
+        gun.get(REALM).get('chat').set({
+            from: currentUser,
+            text: text,
+            time: Date.now()
+        });
+        
+        input.value = "";
+        console.log('📤 Sent chat:', text);
+    }
+
+    function sendSystemChat(text) {
+        gun.get(REALM).get('chat').set({
+            from: 'SYSTEM',
+            text: text,
+            time: Date.now()
+        });
+    }
+
+    function addLog(m) {
+        const l = document.getElementById('game-log');
+        const entry = document.createElement('div');
+        entry.innerHTML = `> ${m}`;
+        l.insertBefore(entry, l.firstChild);
+        
+        while(l.children.length > 12) {
+            l.removeChild(l.lastChild);
+        }
+    }
+
+    function showTab(id) {
+        document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+        document.getElementById('tab-' + id).classList.remove('hidden');
+    }
+</script>
+</body>
+</html>
