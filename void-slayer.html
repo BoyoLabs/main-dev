@@ -37,6 +37,8 @@
         .auth-divider { width: 100%; border-top: 1px solid #222; margin: 15px 0; position: relative; }
         .auth-divider span { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: rgba(20, 20, 25, 0.98); padding: 0 10px; color: #555; font-size: 0.8rem; }
         .realm-info { font-size: 0.75rem; color: #555; text-align: center; margin-top: -5px; margin-bottom: 10px; }
+        .name-link { color: inherit; cursor: pointer; text-decoration: none; border-bottom: 1px dotted #555; transition: 0.15s; }
+        .name-link:hover { color: var(--gold); border-bottom-color: var(--gold); }
     </style>
 </head>
 <body>
@@ -108,6 +110,8 @@
     <div id="nav-dungeon" class="nav-link" onclick="showTab('dungeon')">The Void Gate</div>
     <div class="nav-link" onclick="showTab('lead'); loadLeaderboard();">Leaderboard</div>
     <div class="nav-link" onclick="showTab('shop'); refreshShop();">Black Market</div>
+    <div class="nav-link" onclick="showTab('pvp'); refreshPvpTargets();">The Arena</div>
+    <div class="nav-link" onclick="showTab('guild'); refreshGuildUI();">Guild Hall</div>
     <div class="nav-link" onclick="showTab('chat')">Tavern</div>
     <div class="debug" style="margin-top: auto; padding-top: 20px;">
         <div id="peer-count">Mesh Peers: 0</div>
@@ -121,7 +125,11 @@
         <span>LVL: <span id="s-lvl" class="stat-val">1</span></span>
         <span>HP: <span id="s-hp" class="stat-val">100/100</span></span>
         <span>GOLD: <span id="s-gold" class="stat-val">0</span></span>
-        <span>NAME: <span id="s-name" class="stat-val">---</span></span>
+        <span>NAME: <span id="s-name" class="stat-val" style="cursor:pointer; border-bottom:1px dotted var(--gold);" onclick="viewProfile(currentUser)">---</span></span>
+    </div>
+    <div id="pvp-notification" style="display:none; background:#330000; padding:10px 30px; border-bottom:1px solid #660000; font-size:0.9rem; cursor:pointer; justify-content:space-between; align-items:center;" onclick="showTab('pvp'); refreshPvpTargets(); dismissNotification();">
+        <span id="pvp-notif-text" style="color:#ff6666;"></span>
+        <span style="color:#666; font-size:0.75rem;">CLICK TO VIEW</span>
     </div>
 
     <div class="content">
@@ -168,6 +176,64 @@
                 <button class="action-btn" onclick="sendChat()">Send</button>
             </div>
         </section>
+        <section id="tab-pvp" class="hidden">
+            <div class="card">
+                <h3 style="color:var(--accent); margin-top:0;">The Arena</h3>
+                <p style="color:#888; font-size:0.9rem;">Challenge other players to steal their gold. Higher level opponents yield more XP. <span id="war-bonus-hint" style="color:#ff8800; display:none;">⚔️ Guild war attacks earn WAR POINTS!</span></p>
+                <button class="action-btn" onclick="refreshPvpTargets()" style="margin-bottom:15px;">🔄 Refresh Targets</button>
+                <div id="pvp-targets"></div>
+            </div>
+            <div class="card">
+                <h3 style="color:#cc4444; margin-top:0;">Combat Log</h3>
+                <div id="pvp-log" style="max-height:200px; overflow-y:auto; font-size:0.85rem;"></div>
+            </div>
+        </section>
+        <section id="tab-guild" class="hidden">
+            <!-- No Guild View -->
+            <div id="guild-no-guild">
+                <div class="card">
+                    <h3 style="color:var(--accent); margin-top:0;">Guild Hall</h3>
+                    <p style="color:#888;">You are not in a guild. Create one or join an existing guild.</p>
+                    <div style="margin-top:15px;">
+                        <h4 style="color:var(--gold); margin-bottom:10px;">Create a Guild</h4>
+                        <input type="text" id="guild-create-name" placeholder="Guild name" style="width:200px;">
+                        <button class="action-btn" onclick="createGuild()">Found Guild (500g)</button>
+                    </div>
+                    <div style="margin-top:20px;">
+                        <h4 style="color:var(--gold); margin-bottom:10px;">Available Guilds</h4>
+                        <div id="guild-available-list"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- In Guild View -->
+            <div id="guild-my-guild" class="hidden">
+                <div class="card">
+                    <h3 style="color:var(--accent); margin-top:0;">⚔️ <span id="guild-name-display"></span></h3>
+                    <div id="guild-leader-controls" class="hidden" style="margin-bottom:15px; padding:10px; border:1px dashed var(--gold); background:rgba(212,175,55,0.05);">
+                        <span style="color:var(--gold); font-size:0.85rem;">👑 GUILD LEADER</span>
+                        <button class="action-btn" onclick="disbandGuild()" style="margin-left:10px; border-color:#660000;">Disband</button>
+                    </div>
+                    <button class="action-btn" onclick="leaveGuild()" style="border-color:#666;">Leave Guild</button>
+                    <button class="action-btn" onclick="refreshGuildUI()">🔄 Refresh</button>
+                    <h4 style="color:#888; margin-top:20px;">Members</h4>
+                    <div id="guild-member-list"></div>
+                </div>
+                <div class="card">
+                    <h3 style="color:#ff8800; margin-top:0;">⚔️ Guild Wars</h3>
+                    <div id="guild-war-controls" class="hidden" style="margin-bottom:15px;">
+                        <h4 style="color:var(--gold); margin-bottom:10px;">Declare War</h4>
+                        <div id="guild-war-target-list"></div>
+                    </div>
+                    <h4 style="color:#888;">Active Wars</h4>
+                    <div id="guild-active-wars"><span style="color:#666;">No active wars</span></div>
+                    <h4 style="color:#888; margin-top:15px;">War History</h4>
+                    <div id="guild-war-history"><span style="color:#666;">No past wars</span></div>
+                </div>
+            </div>
+        </section>
+        <section id="tab-profile" class="hidden">
+            <div id="profile-content"></div>
+        </section>
     </div>
 </main>
 
@@ -183,10 +249,12 @@
     let myPeerId = null;
     let connections = new Map();
     let currentUser = null;
-    let p = { lvl:1, xp:0, gold:0, hp:100, mhp:100, str:10, wis:10, race:'Hollow', weap:'None' };
+    let p = { lvl:1, xp:0, gold:0, hp:100, mhp:100, str:10, wis:10, race:'Hollow', weap:'None', guild:null, blurb:'' };
     let seenChatIds = new Set();
     let gameState = {
         players: {},
+        guilds: {},   // { guildName: { leader, members: [], created } }
+        wars: [],     // [{ id, attacker, defender, scores: {att:0, def:0}, goal:10, started, ended, winner }]
         gate: 'CLOSED',
         chat: []
     };
@@ -488,6 +556,26 @@
             case 'ACCOUNT_SYNC':
                 if (data.accounts) mergeAccounts(data.accounts);
                 break;
+
+            case 'PVP_ATTACK':
+                handlePvpNotification(data);
+                broadcastToTabs('PVP_ATTACK', data);
+                broadcastToMesh(data, conn.peer);
+                break;
+
+            case 'GUILD_UPDATE':
+                gameState.guilds = data.guilds;
+                saveGameState();
+                broadcastToTabs('GUILD_UPDATE');
+                broadcastToMesh(data, conn.peer);
+                break;
+
+            case 'WAR_UPDATE':
+                gameState.wars = data.wars;
+                saveGameState();
+                broadcastToTabs('WAR_UPDATE');
+                broadcastToMesh(data, conn.peer);
+                break;
         }
     }
 
@@ -531,6 +619,45 @@
         if (!gameState.gate) {
             gameState.gate = incomingState.gate || 'CLOSED';
         }
+
+        // Merge guilds
+        if (incomingState.guilds) {
+            if (!gameState.guilds) gameState.guilds = {};
+            Object.keys(incomingState.guilds).forEach(name => {
+                if (!gameState.guilds[name]) {
+                    gameState.guilds[name] = incomingState.guilds[name];
+                } else {
+                    const inc = incomingState.guilds[name];
+                    const loc = gameState.guilds[name];
+                    if (inc.members.length > loc.members.length) {
+                        gameState.guilds[name] = inc;
+                    }
+                }
+            });
+            // Remove guilds that were disbanded (exist locally but not in incoming with more data)
+            Object.keys(gameState.guilds).forEach(name => {
+                if (!incomingState.guilds[name] && Object.keys(incomingState.guilds).length > 0) {
+                    // Only delete if incoming has guilds but this one is missing — it was disbanded
+                }
+            });
+        }
+
+        // Merge wars
+        if (incomingState.wars && incomingState.wars.length > 0) {
+            if (!gameState.wars) gameState.wars = [];
+            incomingState.wars.forEach(incWar => {
+                const existing = gameState.wars.find(w => w.id === incWar.id);
+                if (!existing) {
+                    gameState.wars.push(incWar);
+                } else {
+                    const incTotal = (incWar.scores?.att || 0) + (incWar.scores?.def || 0);
+                    const exTotal = (existing.scores?.att || 0) + (existing.scores?.def || 0);
+                    if (incTotal > exTotal || incWar.ended) {
+                        Object.assign(existing, incWar);
+                    }
+                }
+            });
+        }
         
         saveGameState();
         updateLeaderboardDisplay();
@@ -571,6 +698,14 @@
                     connectToPeer(peerId);
                 }
                 break;
+            case 'PVP_ATTACK':
+                handlePvpNotification(data);
+                break;
+            case 'GUILD_UPDATE':
+            case 'WAR_UPDATE':
+                // Reload from localStorage to get latest
+                loadGameState();
+                break;
         }
     };
 
@@ -581,6 +716,8 @@
         if (saved) {
             const state = JSON.parse(saved);
             gameState = state;
+            if (!gameState.guilds) gameState.guilds = {};
+            if (!gameState.wars) gameState.wars = [];
             state.chat.forEach(msg => seenChatIds.add(msg.id));
         }
     }
@@ -638,6 +775,8 @@
             wis: Number(p.wis),
             race: p.race,
             weap: p.weap,
+            guild: p.guild,
+            blurb: p.blurb || '',
             lastSeen: Date.now()
         };
         
@@ -672,10 +811,17 @@
         const time = new Date(msg.time).toLocaleTimeString();
         const isSystem = msg.from === 'SYSTEM';
         const color = isSystem ? 'var(--admin)' : (msg.from === currentUser ? 'var(--gold)' : '#fff');
-        const prefix = isSystem ? '[SYSTEM]' : `[${msg.from}]`;
+        
+        let prefixHtml;
+        if (isSystem) {
+            prefixHtml = `<b style="color:${color}">[SYSTEM]</b>`;
+        } else {
+            const escaped = msg.from.replace(/'/g, "\\'");
+            prefixHtml = `<b class="name-link" style="color:${color}" onclick="viewProfile('${escaped}')">[${msg.from}]</b>`;
+        }
         
         const msgDiv = document.createElement('div');
-        msgDiv.innerHTML = `<span style="color:#666">${time}</span> <b style="color:${color}">${prefix}</b> ${msg.text}`;
+        msgDiv.innerHTML = `<span style="color:#666">${time}</span> ${prefixHtml} ${msg.text}`;
         box.appendChild(msgDiv);
         box.scrollTop = box.scrollHeight;
         
@@ -780,8 +926,10 @@
             const isAdmin = pl.name === ADMIN ? '<span style="color:var(--admin)">(Void Master)</span>' : '';
             const isYou = pl.name === currentUser ? '<span style="color:var(--gold)"> ← YOU</span>' : '';
             const online = (Date.now() - pl.lastSeen < 6000) ? '🟢' : '⚫';
+            const plGuild = getPlayerGuild(pl.name);
+            const guildTag = plGuild ? `<span style="color:var(--gold);">[${plGuild}]</span> ` : '';
             return `<div style="padding:8px; border-bottom:1px solid #222;">
-                ${online} ${i+1}. <b>${pl.name}</b> ${isAdmin}${isYou} - Lvl ${pl.lvl} | ${pl.gold}g | ${pl.race}
+                ${online} ${i+1}. ${guildTag}${nameLink(pl.name)} ${isAdmin}${isYou} - Lvl ${pl.lvl} | ${pl.gold}g | ${pl.race}
             </div>`;
         }).join("");
         
@@ -845,6 +993,715 @@
         refreshUI();
         save();
     }
+
+    // ─── GUILD SYSTEM ────────────────────────────────────────
+
+    function getMyGuild() {
+        if (!p.guild || !gameState.guilds) return null;
+        return gameState.guilds[p.guild] || null;
+    }
+
+    function getPlayerGuild(playerName) {
+        if (!gameState.guilds) return null;
+        for (const [name, guild] of Object.entries(gameState.guilds)) {
+            if (guild.members.includes(playerName)) return name;
+        }
+        return null;
+    }
+
+    function syncGuilds() {
+        saveGameState();
+        broadcastToMesh({ type: 'GUILD_UPDATE', guilds: gameState.guilds });
+        broadcastToTabs('GUILD_UPDATE');
+    }
+
+    function syncWars() {
+        saveGameState();
+        broadcastToMesh({ type: 'WAR_UPDATE', wars: gameState.wars });
+        broadcastToTabs('WAR_UPDATE');
+    }
+
+    function createGuild() {
+        const name = document.getElementById('guild-create-name').value.trim();
+        if (!name || name.length < 2 || name.length > 24) {
+            addLog("<span style='color:red'>Guild name must be 2-24 characters.</span>");
+            return;
+        }
+        if (p.gold < 500) {
+            addLog("<span style='color:red'>Not enough gold! Need 500g to found a guild.</span>");
+            return;
+        }
+        if (p.guild) {
+            addLog("<span style='color:red'>Leave your current guild first!</span>");
+            return;
+        }
+        if (!gameState.guilds) gameState.guilds = {};
+        if (gameState.guilds[name]) {
+            addLog("<span style='color:red'>A guild with that name already exists!</span>");
+            return;
+        }
+
+        p.gold -= 500;
+        p.guild = name;
+
+        gameState.guilds[name] = {
+            leader: currentUser,
+            members: [currentUser],
+            created: Date.now()
+        };
+
+        refreshUI();
+        save();
+        syncGuilds();
+        refreshGuildUI();
+        addLog(`<span style='color:var(--gold)'>⚔️ Founded guild: ${name}</span>`);
+        sendSystemChat(`${currentUser} has founded the guild [${name}]!`);
+    }
+
+    function joinGuild(guildName) {
+        if (p.guild) {
+            addLog("<span style='color:red'>Leave your current guild first!</span>");
+            return;
+        }
+        const guild = gameState.guilds[guildName];
+        if (!guild) return;
+
+        p.guild = guildName;
+        guild.members.push(currentUser);
+
+        save();
+        syncGuilds();
+        refreshGuildUI();
+        addLog(`<span style='color:var(--gold)'>Joined guild: ${guildName}</span>`);
+    }
+
+    function leaveGuild() {
+        if (!p.guild) return;
+        const guild = gameState.guilds[p.guild];
+        if (!guild) { p.guild = null; save(); return; }
+
+        // If leader leaves, transfer or disband
+        if (guild.leader === currentUser) {
+            if (guild.members.length > 1) {
+                guild.members = guild.members.filter(m => m !== currentUser);
+                guild.leader = guild.members[0];
+                addLog(`<span style='color:#888'>Leadership passed to ${guild.leader}.</span>`);
+            } else {
+                // Last member — disband
+                endAllWarsForGuild(p.guild);
+                delete gameState.guilds[p.guild];
+                addLog("<span style='color:#888'>Guild disbanded (no members left).</span>");
+            }
+        } else {
+            guild.members = guild.members.filter(m => m !== currentUser);
+        }
+
+        p.guild = null;
+        save();
+        syncGuilds();
+        refreshGuildUI();
+    }
+
+    function disbandGuild() {
+        if (!p.guild) return;
+        const guild = gameState.guilds[p.guild];
+        if (!guild || guild.leader !== currentUser) {
+            addLog("<span style='color:red'>Only the leader can disband!</span>");
+            return;
+        }
+
+        if (!confirm(`Disband [${p.guild}]? This cannot be undone.`)) return;
+
+        const guildName = p.guild;
+
+        // Clear guild from all members in game state
+        guild.members.forEach(member => {
+            if (gameState.players[member]) {
+                gameState.players[member].guild = null;
+            }
+        });
+
+        endAllWarsForGuild(guildName);
+        delete gameState.guilds[guildName];
+        p.guild = null;
+
+        save();
+        syncGuilds();
+        syncWars();
+        refreshGuildUI();
+        addLog(`<span style='color:red'>Guild [${guildName}] has been disbanded.</span>`);
+        sendSystemChat(`The guild [${guildName}] has been disbanded!`);
+    }
+
+    // ─── WAR SYSTEM ───────────────────────────────────────────
+
+    const WAR_GOAL = 10; // First to 10 kills wins
+
+    function getActiveWar(guild1, guild2) {
+        if (!gameState.wars) return null;
+        return gameState.wars.find(w => 
+            !w.ended && 
+            ((w.attacker === guild1 && w.defender === guild2) || 
+             (w.attacker === guild2 && w.defender === guild1))
+        );
+    }
+
+    function getActiveWarsForGuild(guildName) {
+        if (!gameState.wars) return [];
+        return gameState.wars.filter(w => !w.ended && (w.attacker === guildName || w.defender === guildName));
+    }
+
+    function declareWar(targetGuild) {
+        if (!p.guild) return;
+        const myGuild = getMyGuild();
+        if (!myGuild || myGuild.leader !== currentUser) {
+            addLog("<span style='color:red'>Only the guild leader can declare war!</span>");
+            return;
+        }
+        if (p.guild === targetGuild) return;
+
+        const existing = getActiveWar(p.guild, targetGuild);
+        if (existing) {
+            addLog("<span style='color:red'>Already at war with that guild!</span>");
+            return;
+        }
+
+        if (!gameState.wars) gameState.wars = [];
+
+        const war = {
+            id: 'war_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            attacker: p.guild,
+            defender: targetGuild,
+            scores: { att: 0, def: 0 },
+            goal: WAR_GOAL,
+            started: Date.now(),
+            ended: null,
+            winner: null
+        };
+
+        gameState.wars.push(war);
+        syncWars();
+        refreshGuildUI();
+        addLog(`<span style='color:#ff8800'>⚔️ Declared war on [${targetGuild}]! First to ${WAR_GOAL} kills wins!</span>`);
+        sendSystemChat(`[${p.guild}] has declared WAR on [${targetGuild}]! ⚔️`);
+    }
+
+    function scoreWarKill(winnerGuild, loserGuild) {
+        if (!gameState.wars) return;
+        const war = getActiveWar(winnerGuild, loserGuild);
+        if (!war) return;
+
+        // Figure out which side scored
+        if (war.attacker === winnerGuild) {
+            war.scores.att++;
+        } else {
+            war.scores.def++;
+        }
+
+        // Check for war end
+        if (war.scores.att >= war.goal) {
+            war.ended = Date.now();
+            war.winner = war.attacker;
+            sendSystemChat(`⚔️ [${war.attacker}] has WON the war against [${war.defender}]! (${war.scores.att}-${war.scores.def})`);
+        } else if (war.scores.def >= war.goal) {
+            war.ended = Date.now();
+            war.winner = war.defender;
+            sendSystemChat(`⚔️ [${war.defender}] has WON the war against [${war.attacker}]! (${war.scores.def}-${war.scores.att})`);
+        }
+
+        syncWars();
+    }
+
+    function endAllWarsForGuild(guildName) {
+        if (!gameState.wars) return;
+        gameState.wars.forEach(war => {
+            if (!war.ended && (war.attacker === guildName || war.defender === guildName)) {
+                war.ended = Date.now();
+                war.winner = war.attacker === guildName ? war.defender : war.attacker;
+            }
+        });
+    }
+
+    function refreshGuildUI() {
+        if (!gameState.guilds) gameState.guilds = {};
+        if (!gameState.wars) gameState.wars = [];
+
+        const noGuildEl = document.getElementById('guild-no-guild');
+        const myGuildEl = document.getElementById('guild-my-guild');
+        const warHint = document.getElementById('war-bonus-hint');
+
+        if (!p.guild || !gameState.guilds[p.guild]) {
+            // Not in a guild
+            noGuildEl.classList.remove('hidden');
+            myGuildEl.classList.add('hidden');
+            if (warHint) warHint.style.display = 'none';
+            
+            // Show available guilds
+            const listEl = document.getElementById('guild-available-list');
+            const guilds = Object.entries(gameState.guilds);
+            if (guilds.length === 0) {
+                listEl.innerHTML = '<span style="color:#666;">No guilds exist yet. Be the first!</span>';
+            } else {
+                listEl.innerHTML = guilds.map(([name, g]) => {
+                    return `<div class="card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; padding:12px;">
+                        <div>
+                            <b style="color:var(--gold);">[${name}]</b><br>
+                            <span style="font-size:0.8rem; color:#888;">Leader: ${g.leader} · ${g.members.length} member(s)</span>
+                        </div>
+                        <button class="action-btn" onclick="joinGuild('${name.replace(/'/g, "\\'")}')">Join</button>
+                    </div>`;
+                }).join('');
+            }
+            return;
+        }
+
+        // In a guild
+        noGuildEl.classList.add('hidden');
+        myGuildEl.classList.remove('hidden');
+
+        const guild = gameState.guilds[p.guild];
+        document.getElementById('guild-name-display').innerText = `[${p.guild}]`;
+
+        // Leader controls
+        const leaderCtrl = document.getElementById('guild-leader-controls');
+        const warCtrl = document.getElementById('guild-war-controls');
+        if (guild.leader === currentUser) {
+            leaderCtrl.classList.remove('hidden');
+            warCtrl.classList.remove('hidden');
+        } else {
+            leaderCtrl.classList.add('hidden');
+            warCtrl.classList.add('hidden');
+        }
+
+        // Members
+        const memberList = document.getElementById('guild-member-list');
+        memberList.innerHTML = guild.members.map(name => {
+            const pl = gameState.players[name];
+            const isLeader = name === guild.leader ? ' 👑' : '';
+            const online = pl && (Date.now() - pl.lastSeen < 6000) ? '🟢' : '⚫';
+            const lvl = pl ? `Lvl ${pl.lvl}` : '???';
+            return `<div style="padding:6px 0; border-bottom:1px solid #1a1a1a;">
+                ${online} ${nameLink(name)}${isLeader} — ${lvl}
+            </div>`;
+        }).join('');
+
+        // War targets (other guilds to declare war on)
+        if (guild.leader === currentUser) {
+            const warTargetList = document.getElementById('guild-war-target-list');
+            const otherGuilds = Object.entries(gameState.guilds).filter(([name]) => name !== p.guild);
+            if (otherGuilds.length === 0) {
+                warTargetList.innerHTML = '<span style="color:#666;">No other guilds to challenge.</span>';
+            } else {
+                warTargetList.innerHTML = otherGuilds.map(([name, g]) => {
+                    const atWar = getActiveWar(p.guild, name);
+                    if (atWar) {
+                        return `<div style="padding:6px 0; color:#ff8800;">⚔️ [${name}] — Already at war</div>`;
+                    }
+                    return `<div class="card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; padding:10px;">
+                        <span><b style="color:var(--gold);">[${name}]</b> · ${g.members.length} member(s)</span>
+                        <button class="action-btn" style="border-color:#ff8800;" onclick="declareWar('${name.replace(/'/g, "\\'")}')">⚔️ Declare War</button>
+                    </div>`;
+                }).join('');
+            }
+        }
+
+        // Active wars
+        const activeWars = getActiveWarsForGuild(p.guild);
+        const activeEl = document.getElementById('guild-active-wars');
+        if (activeWars.length === 0) {
+            activeEl.innerHTML = '<span style="color:#666;">No active wars</span>';
+            if (warHint) warHint.style.display = 'none';
+        } else {
+            if (warHint) warHint.style.display = 'inline';
+            activeEl.innerHTML = activeWars.map(war => {
+                const isAttacker = war.attacker === p.guild;
+                const enemy = isAttacker ? war.defender : war.attacker;
+                const myScore = isAttacker ? war.scores.att : war.scores.def;
+                const theirScore = isAttacker ? war.scores.def : war.scores.att;
+                const elapsed = Math.floor((Date.now() - war.started) / 60000);
+                const timeStr = elapsed < 60 ? `${elapsed}m` : `${Math.floor(elapsed/60)}h ${elapsed%60}m`;
+                return `<div class="card" style="border-color:#ff8800; padding:12px; margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <b style="color:#ff8800;">⚔️ vs [${enemy}]</b><br>
+                            <span style="font-size:0.8rem; color:#888;">First to ${war.goal} · ${timeStr} elapsed</span>
+                        </div>
+                        <div style="text-align:center;">
+                            <span style="font-size:1.4rem; color:var(--gold); font-weight:bold;">${myScore}</span>
+                            <span style="color:#666;"> — </span>
+                            <span style="font-size:1.4rem; color:#cc4444; font-weight:bold;">${theirScore}</span>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // War history
+        const pastWars = (gameState.wars || []).filter(w => w.ended && (w.attacker === p.guild || w.defender === p.guild));
+        const historyEl = document.getElementById('guild-war-history');
+        if (pastWars.length === 0) {
+            historyEl.innerHTML = '<span style="color:#666;">No past wars</span>';
+        } else {
+            historyEl.innerHTML = pastWars.slice(-10).reverse().map(war => {
+                const isAttacker = war.attacker === p.guild;
+                const enemy = isAttacker ? war.defender : war.attacker;
+                const myScore = isAttacker ? war.scores.att : war.scores.def;
+                const theirScore = isAttacker ? war.scores.def : war.scores.att;
+                const won = war.winner === p.guild;
+                const dateStr = new Date(war.ended).toLocaleDateString();
+                return `<div style="padding:6px 0; border-bottom:1px solid #1a1a1a;">
+                    <span style="color:${won ? '#44ff44' : '#ff4444'};">${won ? '✅ WON' : '❌ LOST'}</span> 
+                    vs [${enemy}] — ${myScore}:${theirScore} · ${dateStr}
+                </div>`;
+            }).join('');
+        }
+    }
+
+    // ─── PROFILE SYSTEM ──────────────────────────────────────
+
+    function nameLink(name) {
+        if (!name || name === 'SYSTEM') return `<b>${name || '???'}</b>`;
+        const escaped = name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        return `<b class="name-link" onclick="viewProfile('${escaped}')">${name}</b>`;
+    }
+
+    function viewProfile(playerName) {
+        const pl = gameState.players[playerName];
+        const cont = document.getElementById('profile-content');
+        
+        if (!pl) {
+            cont.innerHTML = `<div class="card"><h3>Player Not Found</h3><p style="color:#666;">No data for "${playerName}".</p></div>`;
+            showTab('profile');
+            return;
+        }
+
+        const isMe = pl.name === currentUser;
+        const isAdmin = pl.name === ADMIN;
+        const online = (Date.now() - pl.lastSeen < 6000) ? '<span style="color:#0f0;">● Online</span>' : '<span style="color:#666;">● Offline</span>';
+        const plGuild = getPlayerGuild(pl.name);
+        const guildDisplay = plGuild ? `<span style="color:var(--gold);">[${plGuild}]</span>` : '<span style="color:#666;">No guild</span>';
+        const adminBadge = isAdmin ? ' <span style="color:var(--admin);">★ Void Master</span>' : '';
+        const blurb = pl.blurb || '<span style="color:#555; font-style:italic;">No blurb set.</span>';
+
+        // Equipment display
+        const weapDisplay = pl.weap && pl.weap !== 'None' 
+            ? `<span style="color:lime;">⚔ ${pl.weap}</span>` 
+            : '<span style="color:#555;">None</span>';
+
+        // Stat bars
+        const hpPercent = Math.floor((pl.hp / pl.mhp) * 100);
+        const hpColor = hpPercent > 60 ? '#0f0' : hpPercent > 30 ? '#ff0' : '#f00';
+
+        // Win/loss from wars (approximate from war history)
+        let warWins = 0, warLosses = 0;
+        if (plGuild && gameState.wars) {
+            gameState.wars.filter(w => w.ended).forEach(w => {
+                if (w.attacker === plGuild || w.defender === plGuild) {
+                    if (w.winner === plGuild) warWins++;
+                    else warLosses++;
+                }
+            });
+        }
+
+        // Last seen
+        const lastSeenStr = new Date(pl.lastSeen).toLocaleString();
+
+        let blurbSection;
+        if (isMe) {
+            blurbSection = `
+                <div style="margin-top:15px;">
+                    <label style="color:#888; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px;">Your Blurb</label>
+                    <textarea id="profile-blurb-input" style="width:100%; height:60px; background:#111; border:1px solid #333; color:white; padding:10px; font-family:inherit; resize:vertical; box-sizing:border-box;" maxlength="200">${p.blurb || ''}</textarea>
+                    <button class="action-btn" onclick="saveBlurb()" style="margin-top:5px;">Save Blurb</button>
+                    <span style="font-size:0.75rem; color:#555; margin-left:10px;">Max 200 characters</span>
+                </div>`;
+        } else {
+            blurbSection = `<div style="margin:15px 0; padding:15px; background:#111; border-left:3px solid var(--gold); font-style:italic; color:#ccc;">${blurb}</div>`;
+        }
+
+        cont.innerHTML = `
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div>
+                        <h2 style="color:var(--accent); margin:0 0 5px 0;">${pl.name}${adminBadge}</h2>
+                        <div style="font-size:0.9rem; margin-bottom:3px;">${online} · ${pl.race} · ${guildDisplay}</div>
+                        <div style="font-size:0.8rem; color:#555;">Last seen: ${lastSeenStr}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:2rem; color:var(--gold); font-weight:bold;">Lv.${pl.lvl}</div>
+                    </div>
+                </div>
+                ${isMe ? blurbSection : blurbSection}
+            </div>
+
+            <div class="card">
+                <h3 style="color:var(--accent); margin-top:0;">Stats</h3>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                    <div>
+                        <div style="color:#888; font-size:0.8rem; text-transform:uppercase;">HP</div>
+                        <div style="background:#222; height:20px; margin-top:4px; position:relative;">
+                            <div style="background:${hpColor}; height:100%; width:${hpPercent}%; transition:0.3s;"></div>
+                            <span style="position:absolute; top:2px; left:8px; font-size:0.75rem; color:#fff;">${Math.floor(pl.hp)} / ${pl.mhp}</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="color:#888; font-size:0.8rem; text-transform:uppercase;">Gold</div>
+                        <div style="color:var(--gold); font-size:1.2rem; font-weight:bold;">${pl.gold}g</div>
+                    </div>
+                    <div>
+                        <div style="color:#888; font-size:0.8rem; text-transform:uppercase;">Strength</div>
+                        <div style="color:#ff6666; font-size:1.2rem; font-weight:bold;">${pl.str}</div>
+                    </div>
+                    <div>
+                        <div style="color:#888; font-size:0.8rem; text-transform:uppercase;">Wisdom</div>
+                        <div style="color:#6666ff; font-size:1.2rem; font-weight:bold;">${pl.wis}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3 style="color:var(--accent); margin-top:0;">Equipment</h3>
+                <div style="padding:10px; background:#111; border:1px solid #222;">
+                    <div style="color:#888; font-size:0.8rem; text-transform:uppercase; margin-bottom:5px;">Weapon</div>
+                    <div style="font-size:1.1rem;">${weapDisplay}</div>
+                </div>
+            </div>
+
+            ${plGuild ? `
+            <div class="card">
+                <h3 style="color:var(--accent); margin-top:0;">Guild</h3>
+                <div style="font-size:1.1rem; color:var(--gold); margin-bottom:5px;">[${plGuild}]</div>
+                <div style="color:#888; font-size:0.85rem;">War Record: <span style="color:#0f0;">${warWins}W</span> / <span style="color:#f00;">${warLosses}L</span></div>
+            </div>` : ''}
+
+            ${!isMe ? `
+            <div class="card" style="text-align:center;">
+                <button class="action-btn" style="border-color:#cc4444;" onclick="showTab('pvp'); refreshPvpTargets();">⚔️ Fight in Arena</button>
+            </div>` : ''}
+        `;
+
+        showTab('profile');
+    }
+
+    function saveBlurb() {
+        const input = document.getElementById('profile-blurb-input');
+        if (!input) return;
+        p.blurb = input.value.trim().substring(0, 200);
+        save();
+        addLog("<span style='color:var(--gold)'>Blurb updated!</span>");
+    }
+
+    // ─── PVP ARENA ───────────────────────────────────────────
+
+    let pvpCooldowns = {}; // { targetName: timestamp }
+    const PVP_COOLDOWN_MS = 60000; // 1 minute cooldown per target
+
+    function refreshPvpTargets() {
+        const cont = document.getElementById('pvp-targets');
+        const players = Object.values(gameState.players).filter(pl => pl.name !== currentUser);
+        
+        if (players.length === 0) {
+            cont.innerHTML = '<div style="color:#666;">No other players in the realm...</div>';
+            return;
+        }
+
+        const sorted = players.sort((a, b) => a.lvl - b.lvl);
+        
+        cont.innerHTML = sorted.map(pl => {
+            const lvlDiff = pl.lvl - p.lvl;
+            const diffLabel = lvlDiff > 0 ? `<span style="color:#ff6666;">+${lvlDiff} above you</span>` 
+                            : lvlDiff < 0 ? `<span style="color:#66ff66;">${lvlDiff} below you</span>`
+                            : `<span style="color:#aaa;">same level</span>`;
+            const online = (Date.now() - pl.lastSeen < 6000) ? '🟢' : '⚫';
+            const onCooldown = pvpCooldowns[pl.name] && (Date.now() - pvpCooldowns[pl.name] < PVP_COOLDOWN_MS);
+            const cdLeft = onCooldown ? Math.ceil((PVP_COOLDOWN_MS - (Date.now() - pvpCooldowns[pl.name])) / 1000) : 0;
+            
+            // Guild tag and war indicator
+            const plGuild = getPlayerGuild(pl.name);
+            const guildTag = plGuild ? `<span style="color:var(--gold);">[${plGuild}]</span> ` : '';
+            const atWar = plGuild && p.guild && getActiveWar(p.guild, plGuild);
+            const warTag = atWar ? `<span style="color:#ff8800; font-size:0.8rem;"> ⚔️ AT WAR</span>` : '';
+            
+            const btnHtml = onCooldown 
+                ? `<button class="action-btn" disabled style="opacity:0.4; cursor:not-allowed;">${cdLeft}s</button>`
+                : `<button class="action-btn" style="border-color:${atWar ? '#ff8800' : '#cc4444'};" onclick="pvpAttack('${pl.name}')">${atWar ? '⚔️ War Attack' : '⚔️ Attack'}</button>`;
+            
+            return `<div class="card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:15px; ${atWar ? 'border-color:#ff8800;' : ''}">
+                <div>
+                    ${online} ${guildTag}${nameLink(pl.name)}${warTag} — Lvl ${pl.lvl} | ${pl.gold}g | STR ${pl.str} | WIS ${pl.wis}<br>
+                    <span style="font-size:0.8rem;">${diffLabel} · ${pl.race}</span>
+                </div>
+                ${btnHtml}
+            </div>`;
+        }).join("");
+    }
+
+    function pvpAttack(targetName) {
+        // Cooldown check
+        if (pvpCooldowns[targetName] && (Date.now() - pvpCooldowns[targetName] < PVP_COOLDOWN_MS)) {
+            addLog("<span style='color:red'>That target is still recovering. Wait a moment.</span>");
+            return;
+        }
+
+        const target = gameState.players[targetName];
+        if (!target) {
+            addLog("<span style='color:red'>Target not found!</span>");
+            return;
+        }
+
+        if (p.hp < 20) {
+            addLog("<span style='color:red'>You need at least 20 HP to fight in the arena!</span>");
+            return;
+        }
+
+        // Combat calculation
+        // Attacker power: str + (lvl * 3) + random factor
+        // Defender power: str + wis + (lvl * 2) + random factor (defender gets wis bonus)
+        const attackRoll = p.str + (p.lvl * 3) + Math.floor(Math.random() * 20);
+        const defendRoll = target.str + target.wis + (target.lvl * 2) + Math.floor(Math.random() * 20);
+        
+        const won = attackRoll > defendRoll;
+        const lvlDiff = target.lvl - p.lvl;
+        
+        // Combat damage to attacker regardless of outcome
+        const selfDmg = Math.floor(Math.random() * 10) + 5;
+        p.hp = Math.max(1, p.hp - selfDmg);
+
+        let goldStolen = 0;
+        let xpGained = 0;
+        let resultMsg = '';
+
+        if (won) {
+            // Steal 5-15% of target's gold
+            const stealPercent = (Math.random() * 0.10) + 0.05;
+            goldStolen = Math.max(1, Math.floor(target.gold * stealPercent));
+            
+            // XP scales with level difference (more for higher level targets)
+            const baseXp = 50;
+            const bonusXp = Math.max(0, lvlDiff) * 30;
+            xpGained = baseXp + bonusXp;
+
+            p.gold += goldStolen;
+            p.xp += xpGained;
+            
+            // Deduct gold from target in game state
+            gameState.players[targetName].gold = Math.max(0, target.gold - goldStolen);
+
+            // Check level up
+            const xpNeeded = p.lvl * 100;
+            if (p.xp >= xpNeeded) {
+                p.lvl++;
+                p.xp = 0;
+                p.mhp += 25;
+                p.hp = p.mhp;
+                p.str += 2;
+                addLog("<b style='color:lime'>⚡ LEVEL UP! ⚡</b>");
+            }
+
+            resultMsg = `⚔️ VICTORY vs ${targetName}! Stole ${goldStolen}g, earned ${xpGained}xp (-${selfDmg}hp)`;
+            addPvpLog(`<span style="color:#44ff44;">⚔️ You defeated ${targetName}! +${goldStolen}g, +${xpGained}xp</span>`);
+
+            // Guild war scoring
+            const myGuildName = p.guild;
+            const targetGuildName = getPlayerGuild(targetName);
+            if (myGuildName && targetGuildName && myGuildName !== targetGuildName) {
+                const war = getActiveWar(myGuildName, targetGuildName);
+                if (war) {
+                    scoreWarKill(myGuildName, targetGuildName);
+                    addPvpLog(`<span style="color:#ff8800;">⚔️ +1 WAR POINT for [${myGuildName}]!</span>`);
+                }
+            }
+        } else {
+            // Lost — lose a small amount of gold
+            const lostGold = Math.max(1, Math.floor(p.gold * 0.03));
+            p.gold = Math.max(0, p.gold - lostGold);
+            
+            resultMsg = `💀 DEFEATED by ${targetName}! Lost ${lostGold}g (-${selfDmg}hp)`;
+            addPvpLog(`<span style="color:#ff4444;">💀 You were defeated by ${targetName}. Lost ${lostGold}g</span>`);
+
+            // Guild war scoring for defender's guild
+            const myGuildName2 = p.guild;
+            const targetGuildName2 = getPlayerGuild(targetName);
+            if (myGuildName2 && targetGuildName2 && myGuildName2 !== targetGuildName2) {
+                const war2 = getActiveWar(myGuildName2, targetGuildName2);
+                if (war2) {
+                    scoreWarKill(targetGuildName2, myGuildName2);
+                    addPvpLog(`<span style="color:#ff8800;">⚔️ +1 WAR POINT for [${targetGuildName2}]...</span>`);
+                }
+            }
+        }
+
+        addLog(`<span style='color:#cc4444;'>${resultMsg}</span>`);
+        
+        // Set cooldown
+        pvpCooldowns[targetName] = Date.now();
+
+        // Save attacker state
+        refreshUI();
+        save();
+        saveGameState();
+
+        // Notify the target via mesh
+        const attackResult = {
+            type: 'PVP_ATTACK',
+            attacker: currentUser,
+            target: targetName,
+            won: won,
+            goldStolen: goldStolen,
+            xpGained: xpGained,
+            timestamp: Date.now()
+        };
+        
+        broadcastToMesh(attackResult);
+        broadcastToTabs('PVP_ATTACK', attackResult);
+
+        refreshPvpTargets();
+    }
+
+    function handlePvpNotification(data) {
+        // Only show notification if we are the target
+        if (data.target !== currentUser) return;
+
+        let msg;
+        if (data.won) {
+            msg = `⚔️ ${data.attacker} attacked you and stole ${data.goldStolen}g!`;
+            addPvpLog(`<span style="color:#ff4444;">⚔️ ${data.attacker} raided you and stole ${data.goldStolen}g!</span>`);
+            
+            // Update our local gold to reflect the theft
+            p.gold = Math.max(0, p.gold - data.goldStolen);
+            refreshUI();
+            save();
+        } else {
+            msg = `🛡️ ${data.attacker} attacked you but you defended successfully!`;
+            addPvpLog(`<span style="color:#44ff44;">🛡️ ${data.attacker} tried to raid you but failed!</span>`);
+        }
+
+        // Show notification banner
+        const notifEl = document.getElementById('pvp-notification');
+        document.getElementById('pvp-notif-text').innerText = msg;
+        notifEl.style.display = 'flex';
+    }
+
+    function dismissNotification() {
+        document.getElementById('pvp-notification').style.display = 'none';
+    }
+
+    function addPvpLog(html) {
+        const log = document.getElementById('pvp-log');
+        if (!log) return;
+        const entry = document.createElement('div');
+        const time = new Date().toLocaleTimeString();
+        entry.innerHTML = `<span style="color:#666;">${time}</span> ${html}`;
+        entry.style.padding = '4px 0';
+        entry.style.borderBottom = '1px solid #1a1a1a';
+        log.insertBefore(entry, log.firstChild);
+        
+        while (log.children.length > 20) {
+            log.removeChild(log.lastChild);
+        }
+    }
+
+    // ─── CHAT ──────────────────────────────────────────────────
 
     function sendChat() {
         const input = document.getElementById('chat-in');
