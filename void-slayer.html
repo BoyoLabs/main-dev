@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>VOID-SLAYER | P2P Mesh MMORPG</title>
-    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <style>
         :root { --bg: #050508; --panel: #111116; --accent: #8b0000; --gold: #d4af37; --text: #aaa; --admin: #ff00ff; }
         * { box-sizing: border-box; }
@@ -142,9 +142,9 @@
     <div class="nav-link" onclick="goTab('chat')">Tavern</div>
     <div class="nav-link" onclick="goTab('news'); refreshNews();">News</div>
     <div class="debug" style="margin-top: auto; padding-top: 20px;">
-        <div id="realm-display">Realm: ---</div>
+        <div id="peer-count">Mesh Peers: 0</div>
         <div id="player-count">Players: 0</div>
-        <div id="sync-status">⚫ Connecting...</div>
+        <div id="sync-status">⚫ Not connected</div>
     </div>
 </nav>
 
@@ -289,11 +289,12 @@
     
     const tabChannel = new BroadcastChannel('void-slayer-tabs');
     
+    let peer = null;
+    let myPeerId = null;
+    let connections = new Map();
     let currentUser = null;
     let p = { lvl:1, xp:0, gold:0, hp:100, mhp:100, str:10, wis:10, race:'Hollow', weap:'None', guild:null, blurb:'', avatar:'💀' };
     let seenChatIds = new Set();
-    let lastPvpNotifTime = 0;
-    let gunSaving = false; // Prevent Gun listener feedback loops
     let gameState = {
         players: {},
         guilds: {},
@@ -432,190 +433,309 @@
         initPlayer(account.race);
     }
 
-    // ─── GUN.JS PERSISTENCE & SYNC ──────────────────────────────
-    // Gun.js provides decentralized persistence via free public relay servers.
-    // Data survives even when ALL clients disconnect. No signup required.
-
-    const gun = Gun({
-        peers: ['https://gun-manhattan.herokuapp.com/gun'],
-        localStorage: false
-    });
-
-    let gunRealm = null;
+    // ─── PEER MESH SYSTEM ──────────────────────────────────────
 
     function getRealmName() {
         return document.getElementById('realm-name').value.trim() || 'void-realm-default';
     }
 
-    function initGun() {
+    function realmBeaconId(realm) {
+        let hash = 0;
+        const str = 'VS-' + realm;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return 'vs-realm-' + Math.abs(hash).toString(36);
+    }
+
+    function initMesh() {
         const realm = getRealmName();
-        gunRealm = gun.get('voidslayer_' + realm);
-        console.log('🔫 Gun.js connected to realm:', realm);
-        document.getElementById('realm-display').innerText = `Realm: ${realm}`;
-        document.getElementById('sync-status').innerHTML = '🟢 Synced';
-        document.getElementById('connection-status').innerText = `Realm: ${realm}`;
-
-        // ─── Gun Listeners (reactive sync) ──────────────────
-
-        // Players — each player is stored as a JSON string under their name
-        gunRealm.get('players').map().on((data, key) => {
-            if (!data || typeof data !== 'string' || gunSaving) return;
-            try {
-                const pl = JSON.parse(data);
-                if (!pl || !pl.name) return;
-                const existing = gameState.players[pl.name];
-                // Accept if newer OR if we don't have this player
-                if (!existing || pl.lastSeen > existing.lastSeen) {
-                    gameState.players[pl.name] = pl;
-                    updateLeaderboardDisplay();
-                    updatePlayerCount();
-                }
-            } catch(e) {}
+        const beaconId = realmBeaconId(realm);
+        
+        peer = new Peer(beaconId);
+        
+        peer.on('open', (id) => {
+            myPeerId = id;
+            document.getElementById('connection-status').innerText = `Connected to realm: ${realm}`;
+            console.log('🌐 I am the realm beacon:', id);
+            
+            addPeerToMesh(id);
+            connectToKnownPeers();
         });
-
-        // Accounts
-        gunRealm.get('accounts').map().on((data, key) => {
-            if (!data || typeof data !== 'string') return;
-            try {
-                const acct = JSON.parse(data);
-                if (acct && acct.displayName) {
-                    // Merge: keep existing if we have it (password may have been changed locally)
-                    if (!accountsStore[key]) {
-                        accountsStore[key] = acct;
-                    }
-                }
-            } catch(e) {}
-        });
-
-        // Guilds
-        gunRealm.get('guilds_data').on((data) => {
-            if (!data || typeof data !== 'string' || gunSaving) return;
-            try {
-                const guilds = JSON.parse(data);
-                if (guilds && typeof guilds === 'object' && !Array.isArray(guilds)) {
-                    gameState.guilds = guilds;
-                }
-            } catch(e) {}
-        });
-
-        // Wars
-        gunRealm.get('wars_data').on((data) => {
-            if (!data || typeof data !== 'string' || gunSaving) return;
-            try {
-                const wars = JSON.parse(data);
-                if (Array.isArray(wars)) {
-                    gameState.wars = wars;
-                }
-            } catch(e) {}
-        });
-
-        // Gate
-        gunRealm.get('gate').on((data) => {
-            if (!data || typeof data !== 'string' || gunSaving) return;
-            if (data === 'OPEN' || data === 'CLOSED') {
-                gameState.gate = data;
-                updateGateUI(data);
+        
+        peer.on('error', (err) => {
+            if (err.type === 'unavailable-id') {
+                console.log('🔗 Beacon exists, joining as regular peer...');
+                peer = new Peer();
+                
+                peer.on('open', (id) => {
+                    myPeerId = id;
+                    document.getElementById('connection-status').innerText = `Connected to realm: ${realm}`;
+                    console.log('🌐 My Peer ID:', id);
+                    
+                    addPeerToMesh(id);
+                    connectToPeer(beaconId);
+                    connectToKnownPeers();
+                });
+                
+                peer.on('connection', (conn) => {
+                    console.log('📥 Incoming connection from:', conn.peer);
+                    setupConnection(conn);
+                });
+                
+                peer.on('error', (err2) => {
+                    console.error('❌ Peer error:', err2);
+                    document.getElementById('connection-status').innerText = `⚠ Connection issue (still playable)`;
+                });
+            } else {
+                console.error('❌ Peer error:', err);
+                document.getElementById('connection-status').innerText = `⚠ Connection issue (still playable)`;
             }
         });
-
-        // Chat
-        gunRealm.get('chat_data').on((data) => {
-            if (!data || typeof data !== 'string' || gunSaving) return;
-            try {
-                const chat = JSON.parse(data);
-                if (Array.isArray(chat)) {
-                    chat.forEach(msg => {
-                        if (msg && msg.id && !seenChatIds.has(msg.id)) {
-                            seenChatIds.add(msg.id);
-                            gameState.chat.push(msg);
-                            displayChat(msg);
-                        }
-                    });
-                }
-            } catch(e) {}
-        });
-
-        // News
-        gunRealm.get('news_data').on((data) => {
-            if (!data || typeof data !== 'string' || gunSaving) return;
-            try {
-                const news = JSON.parse(data);
-                if (Array.isArray(news)) {
-                    gameState.news = news;
-                }
-            } catch(e) {}
-        });
-
-        // PVP notifications — per-player node
-        // We start listening for our own notifications after login (in initPlayer)
-    }
-
-    function startPvpListener() {
-        if (!gunRealm || !currentUser) return;
-        gunRealm.get('pvp_notif').get(currentUser).on((data) => {
-            if (!data || typeof data !== 'string') return;
-            try {
-                const notif = JSON.parse(data);
-                if (notif && notif.timestamp && notif.timestamp > lastPvpNotifTime) {
-                    lastPvpNotifTime = notif.timestamp;
-                    handlePvpNotification(notif);
-                }
-            } catch(e) {}
+        
+        peer.on('connection', (conn) => {
+            console.log('📥 Incoming connection from:', conn.peer);
+            setupConnection(conn);
         });
     }
 
-    // ─── Gun Write Helpers ──────────────────────────────────
+    let knownPeersStore = []; // In-memory peer list
 
-    function gunSave(path, value) {
-        if (!gunRealm) return;
-        gunSaving = true;
-        gunRealm.get(path).put(value);
-        setTimeout(() => { gunSaving = false; }, 300);
+    function addPeerToMesh(peerId) {
+        if (!knownPeersStore.includes(peerId)) {
+            knownPeersStore.push(peerId);
+            tabChannel.postMessage({ type: 'NEW_PEER', peerId });
+        }
     }
 
-    function gunSaveKey(path, key, value) {
-        if (!gunRealm) return;
-        gunSaving = true;
-        gunRealm.get(path).get(key).put(value);
-        setTimeout(() => { gunSaving = false; }, 300);
+    function connectToKnownPeers() {
+        console.log('🔍 Known peers:', knownPeersStore);
+        
+        knownPeersStore.forEach(peerId => {
+            if (peerId !== myPeerId && !connections.has(peerId)) {
+                connectToPeer(peerId);
+            }
+        });
     }
 
-    // broadcastToMesh: now writes to Gun instead of PeerJS
-    function broadcastToMesh(message) {
-        if (!gunRealm) return;
+    function connectToPeer(peerId) {
+        if (connections.has(peerId) || peerId === myPeerId) return;
+        
+        console.log('🔗 Connecting to peer:', peerId);
+        const conn = peer.connect(peerId);
+        setupConnection(conn);
+    }
 
-        switch(message.type) {
+    function setupConnection(conn) {
+        connections.set(conn.peer, conn);
+        addPeerToMesh(conn.peer);
+        updatePeerCount();
+        
+        conn.on('open', () => {
+            console.log('✅ Connected to:', conn.peer);
+            document.getElementById('sync-status').innerHTML = '🟢 Mesh Connected';
+            
+            conn.send({
+                type: 'FULL_SYNC',
+                state: gameState,
+                accounts: getAccounts()
+            });
+        });
+        
+        conn.on('data', (data) => {
+            handleMeshMessage(data, conn);
+        });
+        
+        conn.on('close', () => {
+            console.log('👋 Peer disconnected:', conn.peer);
+            connections.delete(conn.peer);
+            updatePeerCount();
+            if (connections.size === 0) {
+                document.getElementById('sync-status').innerHTML = '⚫ No peers';
+            }
+        });
+        
+        conn.on('error', (err) => {
+            console.error('❌ Connection error:', err);
+            connections.delete(conn.peer);
+        });
+    }
+
+    function handleMeshMessage(data, conn) {
+        console.log('📨 Received:', data.type, 'from', conn.peer);
+        
+        switch(data.type) {
+            case 'FULL_SYNC':
+                mergeGameState(data.state);
+                if (data.accounts) mergeAccounts(data.accounts);
+                break;
+                
             case 'PLAYER_UPDATE':
-                gunSaveKey('players', message.player, JSON.stringify(message.data));
+                gameState.players[data.player] = data.data;
+                saveGameState();
+                broadcastToTabs('PLAYER_UPDATE');
+                broadcastToMesh({ type: 'PLAYER_UPDATE', player: data.player, data: data.data }, conn.peer);
+                updateLeaderboardDisplay();
                 break;
+                
             case 'GATE_UPDATE':
-                gunSave('gate', message.state);
+                gameState.gate = data.state;
+                saveGameState();
+                updateGateUI(data.state);
+                broadcastToTabs('GATE_UPDATE', data.state);
+                broadcastToMesh(data, conn.peer);
                 break;
+                
             case 'CHAT_MESSAGE':
-                gunSave('chat_data', JSON.stringify(gameState.chat.slice(-100)));
+                if (!seenChatIds.has(data.msg.id)) {
+                    seenChatIds.add(data.msg.id);
+                    gameState.chat.push(data.msg);
+                    if (gameState.chat.length > 100) gameState.chat.shift();
+                    saveGameState();
+                    displayChat(data.msg);
+                    broadcastToTabs('CHAT_MESSAGE', data.msg);
+                    broadcastToMesh(data, conn.peer);
+                }
                 break;
-            case 'GUILD_UPDATE':
-                gunSave('guilds_data', JSON.stringify(message.guilds));
-                break;
-            case 'WAR_UPDATE':
-                gunSave('wars_data', JSON.stringify(message.wars));
-                break;
-            case 'NEWS_UPDATE':
-                gunSave('news_data', JSON.stringify(message.news));
-                break;
+
             case 'ACCOUNT_SYNC':
-                if (message.accounts) {
-                    Object.keys(message.accounts).forEach(key => {
-                        gunSaveKey('accounts', key, JSON.stringify(message.accounts[key]));
-                    });
-                }
+                if (data.accounts) mergeAccounts(data.accounts);
                 break;
+
             case 'PVP_ATTACK':
-                if (message.target) {
-                    gunSaveKey('pvp_notif', message.target, JSON.stringify(message));
-                }
+                handlePvpNotification(data);
+                broadcastToTabs('PVP_ATTACK', data);
+                broadcastToMesh(data, conn.peer);
+                break;
+
+            case 'GUILD_UPDATE':
+                gameState.guilds = data.guilds;
+                saveGameState();
+                broadcastToTabs('GUILD_UPDATE', gameState.guilds);
+                broadcastToMesh(data, conn.peer);
+                break;
+
+            case 'WAR_UPDATE':
+                gameState.wars = data.wars;
+                saveGameState();
+                broadcastToTabs('WAR_UPDATE', gameState.wars);
+                broadcastToMesh(data, conn.peer);
+                break;
+
+            case 'NEWS_UPDATE':
+                if (data.news) gameState.news = data.news;
+                saveGameState();
+                broadcastToTabs('NEWS_UPDATE', gameState.news);
+                broadcastToMesh(data, conn.peer);
                 break;
         }
+    }
+
+    function mergeAccounts(incoming) {
+        const local = getAccounts();
+        let changed = false;
+        
+        Object.keys(incoming).forEach(key => {
+            if (!local[key]) {
+                local[key] = incoming[key];
+                changed = true;
+            }
+        });
+        
+        if (changed) {
+            saveAccounts(local);
+        }
+    }
+
+    function mergeGameState(incomingState) {
+        Object.keys(incomingState.players).forEach(name => {
+            const incoming = incomingState.players[name];
+            const existing = gameState.players[name];
+            
+            if (!existing || incoming.lastSeen > existing.lastSeen) {
+                gameState.players[name] = incoming;
+            }
+        });
+        
+        incomingState.chat.forEach(msg => {
+            if (!seenChatIds.has(msg.id)) {
+                seenChatIds.add(msg.id);
+                gameState.chat.push(msg);
+                displayChat(msg);
+            }
+        });
+        if (gameState.chat.length > 100) {
+            gameState.chat = gameState.chat.slice(-100);
+        }
+        
+        if (!gameState.gate) {
+            gameState.gate = incomingState.gate || 'CLOSED';
+        }
+
+        // Merge guilds
+        if (incomingState.guilds) {
+            if (!gameState.guilds) gameState.guilds = {};
+            Object.keys(incomingState.guilds).forEach(name => {
+                if (!gameState.guilds[name]) {
+                    gameState.guilds[name] = incomingState.guilds[name];
+                } else {
+                    const inc = incomingState.guilds[name];
+                    const loc = gameState.guilds[name];
+                    if (inc.members.length > loc.members.length) {
+                        gameState.guilds[name] = inc;
+                    }
+                }
+            });
+            // Remove guilds that were disbanded (exist locally but not in incoming with more data)
+            Object.keys(gameState.guilds).forEach(name => {
+                if (!incomingState.guilds[name] && Object.keys(incomingState.guilds).length > 0) {
+                    // Only delete if incoming has guilds but this one is missing — it was disbanded
+                }
+            });
+        }
+
+        // Merge wars
+        if (incomingState.wars && incomingState.wars.length > 0) {
+            if (!gameState.wars) gameState.wars = [];
+            incomingState.wars.forEach(incWar => {
+                const existing = gameState.wars.find(w => w.id === incWar.id);
+                if (!existing) {
+                    gameState.wars.push(incWar);
+                } else {
+                    const incTotal = (incWar.scores?.att || 0) + (incWar.scores?.def || 0);
+                    const exTotal = (existing.scores?.att || 0) + (existing.scores?.def || 0);
+                    if (incTotal > exTotal || incWar.ended) {
+                        Object.assign(existing, incWar);
+                    }
+                }
+            });
+        }
+
+        // Merge news (keep most entries)
+        if (incomingState.news && incomingState.news.length > 0) {
+            if (!gameState.news) gameState.news = [];
+            incomingState.news.forEach(item => {
+                if (!gameState.news.find(n => n.id === item.id)) {
+                    gameState.news.push(item);
+                }
+            });
+            gameState.news.sort((a, b) => b.time - a.time);
+        }
+        
+        saveGameState();
+        updateLeaderboardDisplay();
+        updateGateUI(gameState.gate);
+        console.log('🔄 Merged game state');
+    }
+
+    function broadcastToMesh(message, exceptPeerId = null) {
+        connections.forEach((conn, peerId) => {
+            if (peerId !== exceptPeerId && conn.open) {
+                conn.send(message);
+            }
+        });
     }
 
     function broadcastToTabs(type, data = null) {
@@ -623,8 +743,8 @@
     }
 
     tabChannel.onmessage = (event) => {
-        const { type, data } = event.data;
-
+        const { type, data, peerId } = event.data;
+        
         switch(type) {
             case 'PLAYER_UPDATE':
                 updateLeaderboardDisplay();
@@ -633,9 +753,14 @@
                 updateGateUI(data);
                 break;
             case 'CHAT_MESSAGE':
-                if (data && !seenChatIds.has(data.id)) {
+                if (!seenChatIds.has(data.id)) {
                     seenChatIds.add(data.id);
                     displayChat(data);
+                }
+                break;
+            case 'NEW_PEER':
+                if (peer && peerId !== myPeerId && !connections.has(peerId)) {
+                    connectToPeer(peerId);
                 }
                 break;
             case 'PVP_ATTACK':
@@ -653,31 +778,38 @@
         }
     };
 
-    // ─── GAME STATE HELPERS ──────────────────────────────────
+    // ─── GAME STATE (IN-MEMORY) ──────────────────────────────
 
+    // No localStorage — state lives in memory and syncs via mesh.
+    // saveGameState is kept as a function name for compatibility but does nothing to disk.
     function saveGameState() {
-        // No-op — Gun handles persistence. Kept for compatibility.
+        // In-memory only — state is already in the gameState variable.
+        // Peers receive updates via broadcastToMesh calls.
     }
 
     function loadGameState() {
+        // No-op — fresh state each session. Peers will FULL_SYNC on connect.
         if (!gameState.guilds) gameState.guilds = {};
         if (!gameState.wars) gameState.wars = [];
         if (!gameState.news) gameState.news = [];
     }
 
+    function updatePeerCount() {
+        document.getElementById('peer-count').innerText = `Mesh Peers: ${connections.size}`;
+    }
+
     // ─── INITIALIZE ────────────────────────────────────────────
 
     loadGameState();
-    initGun();
+    initMesh();
 
     // ─── GAME LOGIC ────────────────────────────────────────────
 
     function initPlayer(race) {
         console.log('🎮 Initializing player:', currentUser);
         
-        // Check if Gun already delivered our player data
         if (gameState.players[currentUser]) {
-            console.log('📦 Loading saved player from sync');
+            console.log('📦 Loading saved player');
             Object.assign(p, gameState.players[currentUser]);
         } else {
             console.log('✨ Creating new player');
@@ -689,16 +821,12 @@
         refreshUI();
         save();
         
-        // Start listening for PVP attacks against us
-        startPvpListener();
-        
         gameState.chat.forEach(msg => displayChat(msg));
         updateGateUI(gameState.gate);
         
         sendSystemChat(`${currentUser} has entered the realm!`);
         
-        // Periodic save to keep lastSeen fresh
-        setInterval(() => { save(); }, 5000);
+        setInterval(() => { save(); }, 2000);
         
         updateLeaderboardDisplay();
         updatePlayerCount();
@@ -1685,11 +1813,6 @@
         refreshUI();
         save();
         saveGameState();
-
-        // Also persist target's updated gold to Gun
-        if (gameState.players[targetName]) {
-            gunSaveKey('players', targetName, JSON.stringify(gameState.players[targetName]));
-        }
 
         // Notify the target via mesh
         const attackResult = {
