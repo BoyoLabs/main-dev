@@ -12,10 +12,10 @@
         nav { width: 220px; min-width: 220px; background: var(--panel); border-right: 1px solid #222; display: flex; flex-direction: column; padding: 20px; overflow-y: auto; }
         .nav-link { color: #666; padding: 12px 10px; border-bottom: 1px solid #1a1a1a; cursor: pointer; transition: 0.2s; font-size: 0.95rem; }
         .nav-link:hover { color: #fff; background: #1a1a1f; padding-left: 15px; }
-        main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
         #stats-bar { background: #000; padding: 10px 20px; border-bottom: 1px solid #222; display: flex; gap: 20px; font-family: monospace; font-size: 0.85rem; align-items: center; flex-wrap: wrap; }
         .stat-val { color: var(--gold); font-weight: bold; }
-        .content { flex: 1; padding: 20px; overflow-y: auto; background: radial-gradient(circle at top, #16161d 0%, #050508 100%); }
+        .content { flex: 1; padding: 20px; overflow-y: auto; -webkit-overflow-scrolling: touch; background: radial-gradient(circle at top, #16161d 0%, #050508 100%); }
         .card { background: rgba(20, 20, 25, 0.98); border: 1px solid #333; padding: 20px; margin-bottom: 15px; }
         .action-btn { background: #222; border: 1px solid #444; color: #ccc; padding: 10px 20px; cursor: pointer; text-transform: uppercase; margin: 4px; font-family: inherit; font-size: 0.85rem; }
         .action-btn:hover { background: var(--accent); color: white; border-color: red; }
@@ -54,9 +54,9 @@
             nav { position: fixed; top: 0; left: -280px; width: 260px; min-width: 260px; height: 100%; z-index: 99; transition: left 0.3s ease; padding-top: 15px; }
             nav.open { left: 0; }
             #nav-overlay.open { display: block; }
-            main { flex: 1; }
+            main { flex: 1; min-height: 0; overflow: hidden; }
             #stats-bar { padding: 8px 12px; gap: 10px; font-size: 0.75rem; }
-            .content { padding: 12px; }
+            .content { padding: 12px; padding-bottom: 80px; }
             .card { padding: 15px; }
             .action-btn { padding: 10px 16px; font-size: 0.8rem; }
             #auth-screen { padding: 15px; }
@@ -141,6 +141,7 @@
     <div class="nav-link" onclick="goTab('guild'); refreshGuildUI();">Guild Hall</div>
     <div class="nav-link" onclick="goTab('chat')">Tavern</div>
     <div class="nav-link" onclick="goTab('news'); refreshNews();">News</div>
+    <div id="nav-backup" class="nav-link hidden" onclick="goTab('backup'); refreshBackupInfo();" style="color:var(--admin);">🔒 Backup</div>
     <div class="debug" style="margin-top: auto; padding-top: 20px;">
         <div id="peer-count">Mesh Peers: 0</div>
         <div id="player-count">Players: 0</div>
@@ -276,6 +277,21 @@
                     <button class="action-btn" onclick="postNews()" style="margin-top:8px;">📜 Publish</button>
                 </div>
                 <div id="news-list"><span style="color:#555;">No news yet...</span></div>
+            </div>
+        </section>
+        <section id="tab-backup" class="hidden">
+            <div class="card" style="border: 2px dashed var(--admin);">
+                <h3 style="color:var(--admin); margin-top:0;">🔒 Realm Backup</h3>
+                <p style="color:#888; font-size:0.9rem;">Download the full realm state (players, accounts, guilds, wars, news, chat) as a JSON file. Upload a backup to restore the realm.</p>
+                <div id="backup-info" style="margin:15px 0; padding:12px; background:#111; font-family:monospace; font-size:0.8rem; color:#888;"></div>
+                <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:15px;">
+                    <button class="action-btn" style="border-color:var(--admin);" onclick="downloadBackup()">⬇️ Download Backup</button>
+                    <label class="action-btn" style="border-color:var(--gold); cursor:pointer; display:inline-flex; align-items:center;">
+                        ⬆️ Upload Backup
+                        <input type="file" id="backup-upload" accept=".json" style="display:none; width:0; margin:0; padding:0;" onchange="uploadBackup(event)">
+                    </label>
+                </div>
+                <div id="backup-status" style="margin-top:15px; font-size:0.85rem; min-height:1.2em;"></div>
             </div>
         </section>
         <section id="tab-profile" class="hidden">
@@ -428,6 +444,7 @@
         
         if (currentUser === ADMIN) {
             document.getElementById('admin-controls').classList.remove('hidden');
+            document.getElementById('nav-backup').classList.remove('hidden');
         }
 
         initPlayer(account.race);
@@ -2034,6 +2051,152 @@
                 <div style="font-size:0.75rem; color:#555;">— ${item.author} · ${dateStr}</div>
             </div>`;
         }).join('');
+    }
+
+    // ─── BACKUP SYSTEM (ADMIN ONLY) ──────────────────────────
+
+    function refreshBackupInfo() {
+        const info = document.getElementById('backup-info');
+        if (!info) return;
+        const playerCount = Object.keys(gameState.players).length;
+        const accountCount = Object.keys(getAccounts()).length;
+        const guildCount = Object.keys(gameState.guilds || {}).length;
+        const warCount = (gameState.wars || []).length;
+        const newsCount = (gameState.news || []).length;
+        const chatCount = (gameState.chat || []).length;
+        
+        info.innerHTML = `Players: ${playerCount} · Accounts: ${accountCount} · Guilds: ${guildCount}<br>` +
+            `Wars: ${warCount} · News: ${newsCount} · Chat msgs: ${chatCount}<br>` +
+            `Gate: ${gameState.gate || 'CLOSED'}`;
+    }
+
+    function downloadBackup() {
+        if (currentUser !== ADMIN) return;
+
+        const backup = {
+            _meta: {
+                version: 1,
+                exported: new Date().toISOString(),
+                exportedBy: currentUser,
+                realm: document.getElementById('realm-name').value.trim() || 'void-realm-default'
+            },
+            accounts: getAccounts(),
+            gameState: {
+                players: gameState.players,
+                guilds: gameState.guilds || {},
+                wars: gameState.wars || [],
+                news: gameState.news || [],
+                gate: gameState.gate || 'CLOSED',
+                chat: gameState.chat || []
+            }
+        };
+
+        const json = JSON.stringify(backup, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        a.href = url;
+        a.download = `void-slayer-backup-${dateStr}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        const status = document.getElementById('backup-status');
+        status.style.color = '#44ff44';
+        status.innerText = '✅ Backup downloaded!';
+        addLog("<span style='color:var(--admin)'>Realm backup downloaded.</span>");
+    }
+
+    function uploadBackup(event) {
+        if (currentUser !== ADMIN) return;
+        const status = document.getElementById('backup-status');
+        
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const backup = JSON.parse(e.target.result);
+                
+                // Validate structure
+                if (!backup.gameState || !backup.accounts) {
+                    status.style.color = '#ff4444';
+                    status.innerText = '❌ Invalid backup file — missing gameState or accounts.';
+                    return;
+                }
+
+                const gs = backup.gameState;
+                const playerCount = Object.keys(gs.players || {}).length;
+                const accountCount = Object.keys(backup.accounts || {}).length;
+                const meta = backup._meta || {};
+
+                if (!confirm(
+                    `Restore this backup?\n\n` +
+                    `From: ${meta.exported || 'Unknown date'}\n` +
+                    `Realm: ${meta.realm || 'Unknown'}\n` +
+                    `Players: ${playerCount}\n` +
+                    `Accounts: ${accountCount}\n\n` +
+                    `This will OVERWRITE all current realm data.`
+                )) {
+                    status.style.color = '#888';
+                    status.innerText = 'Restore cancelled.';
+                    return;
+                }
+
+                // Restore accounts
+                const accounts = backup.accounts;
+                saveAccounts(accounts);
+                broadcastToMesh({ type: 'ACCOUNT_SYNC', accounts: accounts });
+
+                // Restore game state
+                if (gs.players) gameState.players = gs.players;
+                if (gs.guilds) gameState.guilds = gs.guilds;
+                if (gs.wars) gameState.wars = gs.wars;
+                if (gs.news) gameState.news = gs.news;
+                if (gs.gate) gameState.gate = gs.gate;
+                if (gs.chat) {
+                    gameState.chat = gs.chat;
+                    gs.chat.forEach(msg => seenChatIds.add(msg.id));
+                }
+
+                // Reload own player data if present
+                if (gameState.players[currentUser]) {
+                    Object.assign(p, gameState.players[currentUser]);
+                    refreshUI();
+                }
+
+                // Broadcast everything
+                broadcastToMesh({ type: 'PLAYER_UPDATE', player: currentUser, data: gameState.players[currentUser] });
+                broadcastToMesh({ type: 'GATE_UPDATE', state: gameState.gate });
+                broadcastToMesh({ type: 'GUILD_UPDATE', guilds: gameState.guilds });
+                broadcastToMesh({ type: 'WAR_UPDATE', wars: gameState.wars });
+                broadcastToMesh({ type: 'NEWS_UPDATE', news: gameState.news });
+                broadcastToMesh({ type: 'CHAT_MESSAGE', msg: gameState.chat[gameState.chat.length - 1] });
+
+                saveGameState();
+                updateLeaderboardDisplay();
+                updateGateUI(gameState.gate);
+                updatePlayerCount();
+
+                status.style.color = '#44ff44';
+                status.innerText = `✅ Restored! ${playerCount} players, ${accountCount} accounts loaded.`;
+                addLog("<span style='color:var(--admin)'>Realm backup restored!</span>");
+                sendSystemChat("🔄 The Void Master has restored the realm from a backup!");
+
+                refreshBackupInfo();
+            } catch (err) {
+                status.style.color = '#ff4444';
+                status.innerText = '❌ Error reading backup: ' + err.message;
+            }
+        };
+        reader.readAsText(file);
+        
+        // Reset file input so same file can be re-selected
+        event.target.value = '';
     }
 </script>
 </body>
