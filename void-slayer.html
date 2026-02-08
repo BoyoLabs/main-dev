@@ -239,9 +239,6 @@
 
 <script>
     const ADMIN = "boyo1991";
-    const ACCOUNTS_KEY = 'VOID_ACCOUNTS';
-    const GAME_STATE_KEY = 'VOID_GAME_STATE';
-    const MESH_PEERS_KEY = 'VOID_MESH_PEERS';
     
     const tabChannel = new BroadcastChannel('void-slayer-tabs');
     
@@ -249,7 +246,7 @@
     let myPeerId = null;
     let connections = new Map();
     let currentUser = null;
-    let p = { lvl:1, xp:0, gold:0, hp:100, mhp:100, str:10, wis:10, race:'Hollow', weap:'None', guild:null, blurb:'' };
+    let p = { lvl:1, xp:0, gold:0, hp:100, mhp:100, str:10, wis:10, race:'Hollow', weap:'None', guild:null, blurb:'', avatar:'💀' };
     let seenChatIds = new Set();
     let gameState = {
         players: {},
@@ -261,6 +258,9 @@
 
     // ─── AUTH SYSTEM ───────────────────────────────────────────
 
+    // In-memory account store (synced via mesh, no localStorage)
+    let accountsStore = {};
+
     async function hashPassword(password) {
         const encoder = new TextEncoder();
         const data = encoder.encode(password);
@@ -270,11 +270,11 @@
     }
 
     function getAccounts() {
-        return JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || '{}');
+        return accountsStore;
     }
 
     function saveAccounts(accounts) {
-        localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+        accountsStore = accounts;
     }
 
     function switchAuthTab(tab) {
@@ -453,20 +453,19 @@
         });
     }
 
+    let knownPeersStore = []; // In-memory peer list
+
     function addPeerToMesh(peerId) {
-        const knownPeers = JSON.parse(localStorage.getItem(MESH_PEERS_KEY) || '[]');
-        if (!knownPeers.includes(peerId)) {
-            knownPeers.push(peerId);
-            localStorage.setItem(MESH_PEERS_KEY, JSON.stringify(knownPeers));
+        if (!knownPeersStore.includes(peerId)) {
+            knownPeersStore.push(peerId);
             tabChannel.postMessage({ type: 'NEW_PEER', peerId });
         }
     }
 
     function connectToKnownPeers() {
-        const knownPeers = JSON.parse(localStorage.getItem(MESH_PEERS_KEY) || '[]');
-        console.log('🔍 Known peers:', knownPeers);
+        console.log('🔍 Known peers:', knownPeersStore);
         
-        knownPeers.forEach(peerId => {
+        knownPeersStore.forEach(peerId => {
             if (peerId !== myPeerId && !connections.has(peerId)) {
                 connectToPeer(peerId);
             }
@@ -702,28 +701,27 @@
                 handlePvpNotification(data);
                 break;
             case 'GUILD_UPDATE':
+                if (data) gameState.guilds = data;
+                break;
             case 'WAR_UPDATE':
-                // Reload from localStorage to get latest
-                loadGameState();
+                if (data) gameState.wars = data;
                 break;
         }
     };
 
-    // ─── GAME STATE PERSISTENCE ────────────────────────────────
+    // ─── GAME STATE (IN-MEMORY) ──────────────────────────────
 
-    function loadGameState() {
-        const saved = localStorage.getItem(GAME_STATE_KEY);
-        if (saved) {
-            const state = JSON.parse(saved);
-            gameState = state;
-            if (!gameState.guilds) gameState.guilds = {};
-            if (!gameState.wars) gameState.wars = [];
-            state.chat.forEach(msg => seenChatIds.add(msg.id));
-        }
+    // No localStorage — state lives in memory and syncs via mesh.
+    // saveGameState is kept as a function name for compatibility but does nothing to disk.
+    function saveGameState() {
+        // In-memory only — state is already in the gameState variable.
+        // Peers receive updates via broadcastToMesh calls.
     }
 
-    function saveGameState() {
-        localStorage.setItem(GAME_STATE_KEY, JSON.stringify(gameState));
+    function loadGameState() {
+        // No-op — fresh state each session. Peers will FULL_SYNC on connect.
+        if (!gameState.guilds) gameState.guilds = {};
+        if (!gameState.wars) gameState.wars = [];
     }
 
     function updatePeerCount() {
@@ -777,6 +775,7 @@
             weap: p.weap,
             guild: p.guild,
             blurb: p.blurb || '',
+            avatar: p.avatar || '💀',
             lastSeen: Date.now()
         };
         
@@ -817,7 +816,9 @@
             prefixHtml = `<b style="color:${color}">[SYSTEM]</b>`;
         } else {
             const escaped = msg.from.replace(/'/g, "\\'");
-            prefixHtml = `<b class="name-link" style="color:${color}" onclick="viewProfile('${escaped}')">[${msg.from}]</b>`;
+            const pl = gameState.players[msg.from];
+            const av = pl && pl.avatar ? pl.avatar : '💀';
+            prefixHtml = `<span class="name-link" style="color:${color}" onclick="viewProfile('${escaped}')">${av} <b>[${msg.from}]</b></span>`;
         }
         
         const msgDiv = document.createElement('div');
@@ -878,6 +879,9 @@
         document.getElementById('s-lvl').innerText = p.lvl;
         document.getElementById('s-hp').innerText = `${Math.floor(p.hp)}/${p.mhp}`;
         document.getElementById('s-gold').innerText = p.gold;
+        if (currentUser) {
+            document.getElementById('s-name').innerText = `${p.avatar || '💀'} ${currentUser}`;
+        }
     }
 
     function spawnBoss() {
@@ -1012,13 +1016,13 @@
     function syncGuilds() {
         saveGameState();
         broadcastToMesh({ type: 'GUILD_UPDATE', guilds: gameState.guilds });
-        broadcastToTabs('GUILD_UPDATE');
+        broadcastToTabs('GUILD_UPDATE', gameState.guilds);
     }
 
     function syncWars() {
         saveGameState();
         broadcastToMesh({ type: 'WAR_UPDATE', wars: gameState.wars });
-        broadcastToTabs('WAR_UPDATE');
+        broadcastToTabs('WAR_UPDATE', gameState.wars);
     }
 
     function createGuild() {
@@ -1359,10 +1363,18 @@
 
     // ─── PROFILE SYSTEM ──────────────────────────────────────
 
+    const AVATARS = [
+        '💀','👻','🐉','🧙','⚔️','🗡️','🛡️','👹','🦇','🐺',
+        '🔥','❄️','⚡','🌑','☠️','🕷️','🐍','🦅','👁️','🎭',
+        '🧛','🧟','👺','🤖','🦊','🐻','🦁','🐲','💎','🌀'
+    ];
+
     function nameLink(name) {
         if (!name || name === 'SYSTEM') return `<b>${name || '???'}</b>`;
         const escaped = name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        return `<b class="name-link" onclick="viewProfile('${escaped}')">${name}</b>`;
+        const pl = gameState.players[name];
+        const av = pl && pl.avatar ? pl.avatar : '💀';
+        return `<span class="name-link" onclick="viewProfile('${escaped}')">${av} <b>${name}</b></span>`;
     }
 
     function viewProfile(playerName) {
@@ -1382,6 +1394,7 @@
         const guildDisplay = plGuild ? `<span style="color:var(--gold);">[${plGuild}]</span>` : '<span style="color:#666;">No guild</span>';
         const adminBadge = isAdmin ? ' <span style="color:var(--admin);">★ Void Master</span>' : '';
         const blurb = pl.blurb || '<span style="color:#555; font-style:italic;">No blurb set.</span>';
+        const avatar = pl.avatar || '💀';
 
         // Equipment display
         const weapDisplay = pl.weap && pl.weap !== 'None' 
@@ -1392,7 +1405,7 @@
         const hpPercent = Math.floor((pl.hp / pl.mhp) * 100);
         const hpColor = hpPercent > 60 ? '#0f0' : hpPercent > 30 ? '#ff0' : '#f00';
 
-        // Win/loss from wars (approximate from war history)
+        // War record
         let warWins = 0, warLosses = 0;
         if (plGuild && gameState.wars) {
             gameState.wars.filter(w => w.ended).forEach(w => {
@@ -1403,9 +1416,9 @@
             });
         }
 
-        // Last seen
         const lastSeenStr = new Date(pl.lastSeen).toLocaleString();
 
+        // ─── Own-profile editable sections ───
         let blurbSection;
         if (isMe) {
             blurbSection = `
@@ -1419,19 +1432,50 @@
             blurbSection = `<div style="margin:15px 0; padding:15px; background:#111; border-left:3px solid var(--gold); font-style:italic; color:#ccc;">${blurb}</div>`;
         }
 
+        let avatarSection = '';
+        if (isMe) {
+            const avatarGrid = AVATARS.map(av => {
+                const selected = av === p.avatar;
+                return `<span onclick="selectAvatar('${av}')" style="font-size:1.6rem; cursor:pointer; padding:6px; border:2px solid ${selected ? 'var(--gold)' : 'transparent'}; border-radius:6px; display:inline-block; transition:0.15s; ${selected ? 'background:rgba(212,175,55,0.15);' : ''}" onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='${selected ? 'var(--gold)' : 'transparent'}'">${av}</span>`;
+            }).join('');
+            avatarSection = `
+            <div class="card">
+                <h3 style="color:var(--accent); margin-top:0;">Choose Avatar</h3>
+                <div style="line-height:2.5;">${avatarGrid}</div>
+            </div>`;
+        }
+
+        let passwordSection = '';
+        if (isMe) {
+            passwordSection = `
+            <div class="card">
+                <h3 style="color:var(--accent); margin-top:0;">Change Password</h3>
+                <div style="display:flex; flex-direction:column; gap:8px; max-width:300px;">
+                    <input type="password" id="profile-old-pw" placeholder="Current password" style="width:100%;">
+                    <input type="password" id="profile-new-pw" placeholder="New password" style="width:100%;">
+                    <input type="password" id="profile-new-pw2" placeholder="Confirm new password" style="width:100%;">
+                    <button class="action-btn" onclick="changePassword()" style="margin-top:5px;">Update Password</button>
+                    <div id="pw-change-msg" style="font-size:0.85rem; min-height:1.2em;"></div>
+                </div>
+            </div>`;
+        }
+
         cont.innerHTML = `
             <div class="card">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                    <div>
-                        <h2 style="color:var(--accent); margin:0 0 5px 0;">${pl.name}${adminBadge}</h2>
-                        <div style="font-size:0.9rem; margin-bottom:3px;">${online} · ${pl.race} · ${guildDisplay}</div>
-                        <div style="font-size:0.8rem; color:#555;">Last seen: ${lastSeenStr}</div>
+                    <div style="display:flex; gap:15px; align-items:center;">
+                        <div style="font-size:3.5rem; width:70px; height:70px; display:flex; align-items:center; justify-content:center; background:#111; border:2px solid #333; border-radius:10px;">${avatar}</div>
+                        <div>
+                            <h2 style="color:var(--accent); margin:0 0 5px 0;">${pl.name}${adminBadge}</h2>
+                            <div style="font-size:0.9rem; margin-bottom:3px;">${online} · ${pl.race} · ${guildDisplay}</div>
+                            <div style="font-size:0.8rem; color:#555;">Last seen: ${lastSeenStr}</div>
+                        </div>
                     </div>
                     <div style="text-align:right;">
                         <div style="font-size:2rem; color:var(--gold); font-weight:bold;">Lv.${pl.lvl}</div>
                     </div>
                 </div>
-                ${isMe ? blurbSection : blurbSection}
+                ${blurbSection}
             </div>
 
             <div class="card">
@@ -1474,6 +1518,9 @@
                 <div style="color:#888; font-size:0.85rem;">War Record: <span style="color:#0f0;">${warWins}W</span> / <span style="color:#f00;">${warLosses}L</span></div>
             </div>` : ''}
 
+            ${avatarSection}
+            ${passwordSection}
+
             ${!isMe ? `
             <div class="card" style="text-align:center;">
                 <button class="action-btn" style="border-color:#cc4444;" onclick="showTab('pvp'); refreshPvpTargets();">⚔️ Fight in Arena</button>
@@ -1489,6 +1536,59 @@
         p.blurb = input.value.trim().substring(0, 200);
         save();
         addLog("<span style='color:var(--gold)'>Blurb updated!</span>");
+    }
+
+    function selectAvatar(av) {
+        p.avatar = av;
+        save();
+        // Re-render profile to show selection
+        viewProfile(currentUser);
+        addLog(`<span style='color:var(--gold)'>Avatar changed to ${av}</span>`);
+    }
+
+    async function changePassword() {
+        const oldPw = document.getElementById('profile-old-pw').value;
+        const newPw = document.getElementById('profile-new-pw').value;
+        const newPw2 = document.getElementById('profile-new-pw2').value;
+        const msgEl = document.getElementById('pw-change-msg');
+        
+        msgEl.style.color = '#ff4444';
+        
+        if (!oldPw || !newPw || !newPw2) {
+            msgEl.innerText = 'Please fill in all fields.';
+            return;
+        }
+        if (newPw.length < 4) {
+            msgEl.innerText = 'New password must be at least 4 characters.';
+            return;
+        }
+        if (newPw !== newPw2) {
+            msgEl.innerText = 'New passwords do not match.';
+            return;
+        }
+
+        const accounts = getAccounts();
+        const account = accounts[currentUser.toLowerCase()];
+        if (!account) {
+            msgEl.innerText = 'Account error.';
+            return;
+        }
+
+        const oldHash = await hashPassword(oldPw);
+        if (oldHash !== account.hash) {
+            msgEl.innerText = 'Current password is incorrect.';
+            return;
+        }
+
+        account.hash = await hashPassword(newPw);
+        saveAccounts(accounts);
+        broadcastToMesh({ type: 'ACCOUNT_SYNC', accounts: accounts });
+
+        msgEl.style.color = '#44ff44';
+        msgEl.innerText = 'Password changed successfully!';
+        document.getElementById('profile-old-pw').value = '';
+        document.getElementById('profile-new-pw').value = '';
+        document.getElementById('profile-new-pw2').value = '';
     }
 
     // ─── PVP ARENA ───────────────────────────────────────────
