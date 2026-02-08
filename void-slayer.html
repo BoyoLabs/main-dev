@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>VOID-SLAYER | Final P2P Fix</title>
-    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
+    <title>VOID-SLAYER | P2P Mesh MMORPG</title>
+    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <style>
         :root { --bg: #050508; --panel: #111116; --accent: #8b0000; --gold: #d4af37; --text: #aaa; --admin: #ff00ff; }
         body { background: var(--bg); color: var(--text); font-family: 'Crimson Text', serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
@@ -20,32 +19,86 @@
         .action-btn:hover { background: var(--accent); color: white; border-color: red; }
         #game-log { height: 160px; overflow-y: auto; border-top: 1px solid #222; padding-top: 10px; font-size: 0.85rem; color: #888; margin-top: 20px; }
         #auth-screen { position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; align-items: center; justify-content: center; flex-direction: column; }
-        input, select { background: #111; border: 1px solid #333; color: white; padding: 12px; margin-bottom: 12px; width: 260px; }
+        input, select { background: #111; border: 1px solid #333; color: white; padding: 12px; margin-bottom: 12px; width: 260px; box-sizing: border-box; }
         .hidden { display: none; }
         .debug { font-size: 0.75rem; color: #555; margin-top: 10px; font-family: monospace; }
+
+        /* Auth form styles */
+        .auth-card { background: rgba(20, 20, 25, 0.98); border: 1px solid #333; padding: 30px 40px; display: flex; flex-direction: column; align-items: center; max-width: 400px; width: 100%; }
+        .auth-tabs { display: flex; gap: 0; margin-bottom: 20px; width: 100%; }
+        .auth-tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; background: #111; border: 1px solid #333; color: #666; text-transform: uppercase; font-family: inherit; letter-spacing: 2px; font-size: 0.85rem; transition: 0.2s; }
+        .auth-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+        .auth-tab:hover:not(.active) { color: #fff; background: #1a1a1f; }
+        .auth-error { color: #ff4444; font-size: 0.85rem; margin-bottom: 10px; min-height: 1.2em; text-align: center; }
+        .auth-success { color: #44ff44; font-size: 0.85rem; margin-bottom: 10px; min-height: 1.2em; text-align: center; }
+        .auth-field { width: 100%; }
+        .auth-field label { display: block; color: #888; font-size: 0.8rem; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
+        .auth-field input, .auth-field select { width: 100%; }
+        .auth-divider { width: 100%; border-top: 1px solid #222; margin: 15px 0; position: relative; }
+        .auth-divider span { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: rgba(20, 20, 25, 0.98); padding: 0 10px; color: #555; font-size: 0.8rem; }
+        .realm-info { font-size: 0.75rem; color: #555; text-align: center; margin-top: -5px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
 <div id="auth-screen">
-    <h1 style="color:var(--accent); letter-spacing: 5px;">VOID-SLAYER</h1>
-    <div class="card" style="max-width: 500px; text-align: center; margin-bottom: 20px;">
-        <p style="color: var(--gold); margin: 0;">
-            🌐 <strong>SHARED PUBLIC REALM</strong><br>
-            <span style="font-size: 0.9rem; color: #888;">
-                All data is public and shared across all players.<br>
-                Works in same browser via localStorage sync.
-            </span>
-        </p>
-    </div>
-    <div class="card" style="display:flex; flex-direction:column; align-items:center;">
-        <input type="text" id="alias" placeholder="Username">
-        <input type="password" id="pass" placeholder="Password (for login only)">
-        <select id="race-sel">
-            <option value="Hollow">Hollow (+Str)</option>
-            <option value="Wraith">Wraith (+Wis)</option>
-        </select>
-        <button class="action-btn" onclick="login()">Enter the Void</button>
+    <h1 style="color:var(--accent); letter-spacing: 5px; margin-bottom: 5px;">VOID-SLAYER</h1>
+    <p style="color: #555; margin-top: 0; margin-bottom: 25px; font-size: 0.9rem;">P2P Mesh MMORPG</p>
+
+    <div class="auth-card">
+        <div class="auth-tabs">
+            <div class="auth-tab active" id="tab-login-btn" onclick="switchAuthTab('login')">Login</div>
+            <div class="auth-tab" id="tab-register-btn" onclick="switchAuthTab('register')">Register</div>
+        </div>
+
+        <div id="auth-error" class="auth-error"></div>
+        <div id="auth-success" class="auth-success"></div>
+
+        <!-- Login Form -->
+        <div id="auth-login">
+            <div class="auth-field">
+                <label>Username</label>
+                <input type="text" id="login-username" placeholder="Enter username" onkeypress="if(event.key==='Enter')doLogin()">
+            </div>
+            <div class="auth-field">
+                <label>Password</label>
+                <input type="password" id="login-password" placeholder="Enter password" onkeypress="if(event.key==='Enter')doLogin()">
+            </div>
+            <button class="action-btn" style="width:100%; margin: 10px 0 0 0;" onclick="doLogin()">Enter the Void</button>
+        </div>
+
+        <!-- Register Form -->
+        <div id="auth-register" class="hidden">
+            <div class="auth-field">
+                <label>Username</label>
+                <input type="text" id="reg-username" placeholder="Choose a username" onkeypress="if(event.key==='Enter')doRegister()">
+            </div>
+            <div class="auth-field">
+                <label>Password</label>
+                <input type="password" id="reg-password" placeholder="Choose a password" onkeypress="if(event.key==='Enter')doRegister()">
+            </div>
+            <div class="auth-field">
+                <label>Confirm Password</label>
+                <input type="password" id="reg-password2" placeholder="Confirm password" onkeypress="if(event.key==='Enter')doRegister()">
+            </div>
+            <div class="auth-field">
+                <label>Race</label>
+                <select id="race-sel" style="width:100%;">
+                    <option value="Hollow">Hollow (+Str)</option>
+                    <option value="Wraith">Wraith (+Wis)</option>
+                </select>
+            </div>
+            <button class="action-btn" style="width:100%; margin: 10px 0 0 0;" onclick="doRegister()">Create Character</button>
+        </div>
+
+        <div class="auth-divider"><span>REALM</span></div>
+
+        <div class="auth-field">
+            <input type="text" id="realm-name" value="void-realm-default" placeholder="Realm name" style="text-align:center; font-family: monospace; color: var(--gold); border-color: #444;">
+        </div>
+        <div class="realm-info">Players in the same realm auto-connect. Change this to create a private realm.</div>
+
+        <div class="debug" id="connection-status">Initializing...</div>
     </div>
 </div>
 
@@ -56,6 +109,11 @@
     <div class="nav-link" onclick="showTab('lead'); loadLeaderboard();">Leaderboard</div>
     <div class="nav-link" onclick="showTab('shop'); refreshShop();">Black Market</div>
     <div class="nav-link" onclick="showTab('chat')">Tavern</div>
+    <div class="debug" style="margin-top: auto; padding-top: 20px;">
+        <div id="peer-count">Mesh Peers: 0</div>
+        <div id="player-count">Players: 0</div>
+        <div id="sync-status">⚫ Not connected</div>
+    </div>
 </nav>
 
 <main>
@@ -108,156 +166,548 @@
                 <div id="chat-box" style="height:200px; overflow-y:auto; background:#000; padding:10px; margin-bottom:10px;"></div>
                 <input id="chat-in" style="width:70%;" onkeypress="if(event.key==='Enter')sendChat()">
                 <button class="action-btn" onclick="sendChat()">Send</button>
-                <div class="debug" id="chat-debug"></div>
             </div>
         </section>
     </div>
 </main>
 
 <script>
-    // SINGLE SHARED GUN INSTANCE - ALL DATA PUBLIC
-    const gun = Gun({
-        localStorage: true,
-        radisk: true
-    });
-    
     const ADMIN = "boyo1991";
-    const REALM = 'VOID_REALM'; // Single shared namespace
+    const ACCOUNTS_KEY = 'VOID_ACCOUNTS';
+    const GAME_STATE_KEY = 'VOID_GAME_STATE';
+    const MESH_PEERS_KEY = 'VOID_MESH_PEERS';
     
+    const tabChannel = new BroadcastChannel('void-slayer-tabs');
+    
+    let peer = null;
+    let myPeerId = null;
+    let connections = new Map();
     let currentUser = null;
     let p = { lvl:1, xp:0, gold:0, hp:100, mhp:100, str:10, wis:10, race:'Hollow', weap:'None' };
+    let seenChatIds = new Set();
+    let gameState = {
+        players: {},
+        gate: 'CLOSED',
+        chat: []
+    };
 
-    function login() {
-        const alias = document.getElementById('alias').value.trim();
-        const pass = document.getElementById('pass').value;
+    // ─── AUTH SYSTEM ───────────────────────────────────────────
+
+    async function hashPassword(password) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(password);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function getAccounts() {
+        return JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || '{}');
+    }
+
+    function saveAccounts(accounts) {
+        localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+    }
+
+    function switchAuthTab(tab) {
+        document.getElementById('auth-error').innerText = '';
+        document.getElementById('auth-success').innerText = '';
         
-        if (!alias) {
-            alert("Please enter a username");
+        if (tab === 'login') {
+            document.getElementById('auth-login').classList.remove('hidden');
+            document.getElementById('auth-register').classList.add('hidden');
+            document.getElementById('tab-login-btn').classList.add('active');
+            document.getElementById('tab-register-btn').classList.remove('active');
+        } else {
+            document.getElementById('auth-login').classList.add('hidden');
+            document.getElementById('auth-register').classList.remove('hidden');
+            document.getElementById('tab-login-btn').classList.remove('active');
+            document.getElementById('tab-register-btn').classList.add('active');
+        }
+    }
+
+    async function doRegister() {
+        const username = document.getElementById('reg-username').value.trim();
+        const password = document.getElementById('reg-password').value;
+        const password2 = document.getElementById('reg-password2').value;
+        const race = document.getElementById('race-sel').value;
+        const errorEl = document.getElementById('auth-error');
+        const successEl = document.getElementById('auth-success');
+        
+        errorEl.innerText = '';
+        successEl.innerText = '';
+
+        if (!username || username.length < 2) {
+            errorEl.innerText = 'Username must be at least 2 characters.';
             return;
         }
+        if (username.length > 20) {
+            errorEl.innerText = 'Username must be 20 characters or less.';
+            return;
+        }
+        if (!password || password.length < 4) {
+            errorEl.innerText = 'Password must be at least 4 characters.';
+            return;
+        }
+        if (password !== password2) {
+            errorEl.innerText = 'Passwords do not match.';
+            return;
+        }
+
+        const accounts = getAccounts();
+        if (accounts[username.toLowerCase()]) {
+            errorEl.innerText = 'That username is already taken.';
+            return;
+        }
+
+        const hash = await hashPassword(password);
+        accounts[username.toLowerCase()] = {
+            displayName: username,
+            hash: hash,
+            race: race,
+            created: Date.now()
+        };
+        saveAccounts(accounts);
+
+        broadcastToMesh({ type: 'ACCOUNT_SYNC', accounts: accounts });
+
+        successEl.innerText = 'Account created! You can now log in.';
         
-        currentUser = alias;
+        setTimeout(() => {
+            switchAuthTab('login');
+            document.getElementById('login-username').value = username;
+            document.getElementById('login-password').focus();
+        }, 1000);
+    }
+
+    async function doLogin() {
+        const username = document.getElementById('login-username').value.trim();
+        const password = document.getElementById('login-password').value;
+        const errorEl = document.getElementById('auth-error');
+        
+        errorEl.innerText = '';
+
+        if (!username || !password) {
+            errorEl.innerText = 'Please enter username and password.';
+            return;
+        }
+
+        const accounts = getAccounts();
+        const account = accounts[username.toLowerCase()];
+        
+        if (!account) {
+            errorEl.innerText = 'Account not found. Register first!';
+            return;
+        }
+
+        const hash = await hashPassword(password);
+        if (hash !== account.hash) {
+            errorEl.innerText = 'Incorrect password.';
+            return;
+        }
+
+        currentUser = account.displayName;
         document.getElementById('auth-screen').style.display = 'none';
-        document.getElementById('s-name').innerText = alias;
+        document.getElementById('s-name').innerText = currentUser;
         
-        if(alias === ADMIN) {
+        if (currentUser === ADMIN) {
             document.getElementById('admin-controls').classList.remove('hidden');
         }
-        
-        initGame();
+
+        initPlayer(account.race);
     }
 
-    function initGame() {
-        console.log('🎮 Initializing game for:', currentUser);
+    // ─── PEER MESH SYSTEM ──────────────────────────────────────
+
+    function getRealmName() {
+        return document.getElementById('realm-name').value.trim() || 'void-realm-default';
+    }
+
+    function realmBeaconId(realm) {
+        let hash = 0;
+        const str = 'VS-' + realm;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return 'vs-realm-' + Math.abs(hash).toString(36);
+    }
+
+    function initMesh() {
+        const realm = getRealmName();
+        const beaconId = realmBeaconId(realm);
         
-        // Load player data from PUBLIC shared space
-        gun.get(REALM).get('players').get(currentUser).once((data) => {
-            if (data) {
-                console.log('📦 Loading existing player:', data);
-                Object.keys(p).forEach(k => {
-                    if (data[k] !== undefined) p[k] = data[k];
+        peer = new Peer(beaconId);
+        
+        peer.on('open', (id) => {
+            myPeerId = id;
+            document.getElementById('connection-status').innerText = `Connected to realm: ${realm}`;
+            console.log('🌐 I am the realm beacon:', id);
+            
+            addPeerToMesh(id);
+            connectToKnownPeers();
+        });
+        
+        peer.on('error', (err) => {
+            if (err.type === 'unavailable-id') {
+                console.log('🔗 Beacon exists, joining as regular peer...');
+                peer = new Peer();
+                
+                peer.on('open', (id) => {
+                    myPeerId = id;
+                    document.getElementById('connection-status').innerText = `Connected to realm: ${realm}`;
+                    console.log('🌐 My Peer ID:', id);
+                    
+                    addPeerToMesh(id);
+                    connectToPeer(beaconId);
+                    connectToKnownPeers();
+                });
+                
+                peer.on('connection', (conn) => {
+                    console.log('📥 Incoming connection from:', conn.peer);
+                    setupConnection(conn);
+                });
+                
+                peer.on('error', (err2) => {
+                    console.error('❌ Peer error:', err2);
+                    document.getElementById('connection-status').innerText = `⚠ Connection issue (still playable)`;
                 });
             } else {
-                console.log('✨ New player created');
-                p.race = document.getElementById('race-sel').value;
-                p.str = p.race === 'Hollow' ? 15 : 10;
-                p.wis = p.race === 'Wraith' ? 15 : 10;
-            }
-            refreshUI();
-            save();
-        });
-
-        // Listen to gate state changes
-        gun.get(REALM).get('gate').on((state) => {
-            console.log('🌀 Gate state:', state);
-            updateGateUI(state);
-        });
-
-        // Listen to chat messages
-        let seenChats = new Set();
-        gun.get(REALM).get('chat').map().on((msg, id) => {
-            if (msg && msg.text && msg.from && !seenChats.has(id)) {
-                seenChats.add(id);
-                displayChat(msg);
-                console.log('💬 Chat:', msg);
+                console.error('❌ Peer error:', err);
+                document.getElementById('connection-status').innerText = `⚠ Connection issue (still playable)`;
             }
         });
-
-        // Heartbeat - announce presence every 2 seconds
-        setInterval(() => {
-            gun.get(REALM).get('players').get(currentUser).put({
-                name: currentUser,
-                lvl: Number(p.lvl),
-                gold: Number(p.gold),
-                hp: Number(p.hp),
-                mhp: Number(p.mhp),
-                str: Number(p.str),
-                wis: Number(p.wis),
-                race: p.race,
-                weap: p.weap,
-                lastSeen: Date.now()
-            });
-        }, 2000);
-
-        // Auto-load leaderboard
-        loadLeaderboard();
-        setInterval(loadLeaderboard, 5000);
+        
+        peer.on('connection', (conn) => {
+            console.log('📥 Incoming connection from:', conn.peer);
+            setupConnection(conn);
+        });
     }
 
-    function updateGateUI(state) {
-        const nav = document.getElementById('nav-dungeon');
-        const ui = document.getElementById('boss-ui');
-        const desc = document.getElementById('d-desc');
+    function addPeerToMesh(peerId) {
+        const knownPeers = JSON.parse(localStorage.getItem(MESH_PEERS_KEY) || '[]');
+        if (!knownPeers.includes(peerId)) {
+            knownPeers.push(peerId);
+            localStorage.setItem(MESH_PEERS_KEY, JSON.stringify(knownPeers));
+            tabChannel.postMessage({ type: 'NEW_PEER', peerId });
+        }
+    }
+
+    function connectToKnownPeers() {
+        const knownPeers = JSON.parse(localStorage.getItem(MESH_PEERS_KEY) || '[]');
+        console.log('🔍 Known peers:', knownPeers);
         
-        if(state === "OPEN") {
-            nav.style.color = "#ff00ff";
-            nav.style.fontWeight = "bold";
-            ui.classList.remove('hidden');
-            desc.innerText = "⚠️ THE VOID MASTER HAS OPENED THE GATE! ⚠️";
+        knownPeers.forEach(peerId => {
+            if (peerId !== myPeerId && !connections.has(peerId)) {
+                connectToPeer(peerId);
+            }
+        });
+    }
+
+    function connectToPeer(peerId) {
+        if (connections.has(peerId) || peerId === myPeerId) return;
+        
+        console.log('🔗 Connecting to peer:', peerId);
+        const conn = peer.connect(peerId);
+        setupConnection(conn);
+    }
+
+    function setupConnection(conn) {
+        connections.set(conn.peer, conn);
+        addPeerToMesh(conn.peer);
+        updatePeerCount();
+        
+        conn.on('open', () => {
+            console.log('✅ Connected to:', conn.peer);
+            document.getElementById('sync-status').innerHTML = '🟢 Mesh Connected';
+            
+            conn.send({
+                type: 'FULL_SYNC',
+                state: gameState,
+                accounts: getAccounts()
+            });
+        });
+        
+        conn.on('data', (data) => {
+            handleMeshMessage(data, conn);
+        });
+        
+        conn.on('close', () => {
+            console.log('👋 Peer disconnected:', conn.peer);
+            connections.delete(conn.peer);
+            updatePeerCount();
+            if (connections.size === 0) {
+                document.getElementById('sync-status').innerHTML = '⚫ No peers';
+            }
+        });
+        
+        conn.on('error', (err) => {
+            console.error('❌ Connection error:', err);
+            connections.delete(conn.peer);
+        });
+    }
+
+    function handleMeshMessage(data, conn) {
+        console.log('📨 Received:', data.type, 'from', conn.peer);
+        
+        switch(data.type) {
+            case 'FULL_SYNC':
+                mergeGameState(data.state);
+                if (data.accounts) mergeAccounts(data.accounts);
+                break;
+                
+            case 'PLAYER_UPDATE':
+                gameState.players[data.player] = data.data;
+                saveGameState();
+                broadcastToTabs('PLAYER_UPDATE');
+                broadcastToMesh({ type: 'PLAYER_UPDATE', player: data.player, data: data.data }, conn.peer);
+                updateLeaderboardDisplay();
+                break;
+                
+            case 'GATE_UPDATE':
+                gameState.gate = data.state;
+                saveGameState();
+                updateGateUI(data.state);
+                broadcastToTabs('GATE_UPDATE', data.state);
+                broadcastToMesh(data, conn.peer);
+                break;
+                
+            case 'CHAT_MESSAGE':
+                if (!seenChatIds.has(data.msg.id)) {
+                    seenChatIds.add(data.msg.id);
+                    gameState.chat.push(data.msg);
+                    if (gameState.chat.length > 100) gameState.chat.shift();
+                    saveGameState();
+                    displayChat(data.msg);
+                    broadcastToTabs('CHAT_MESSAGE', data.msg);
+                    broadcastToMesh(data, conn.peer);
+                }
+                break;
+
+            case 'ACCOUNT_SYNC':
+                if (data.accounts) mergeAccounts(data.accounts);
+                break;
+        }
+    }
+
+    function mergeAccounts(incoming) {
+        const local = getAccounts();
+        let changed = false;
+        
+        Object.keys(incoming).forEach(key => {
+            if (!local[key]) {
+                local[key] = incoming[key];
+                changed = true;
+            }
+        });
+        
+        if (changed) {
+            saveAccounts(local);
+        }
+    }
+
+    function mergeGameState(incomingState) {
+        Object.keys(incomingState.players).forEach(name => {
+            const incoming = incomingState.players[name];
+            const existing = gameState.players[name];
+            
+            if (!existing || incoming.lastSeen > existing.lastSeen) {
+                gameState.players[name] = incoming;
+            }
+        });
+        
+        incomingState.chat.forEach(msg => {
+            if (!seenChatIds.has(msg.id)) {
+                seenChatIds.add(msg.id);
+                gameState.chat.push(msg);
+                displayChat(msg);
+            }
+        });
+        if (gameState.chat.length > 100) {
+            gameState.chat = gameState.chat.slice(-100);
+        }
+        
+        if (!gameState.gate) {
+            gameState.gate = incomingState.gate || 'CLOSED';
+        }
+        
+        saveGameState();
+        updateLeaderboardDisplay();
+        updateGateUI(gameState.gate);
+        console.log('🔄 Merged game state');
+    }
+
+    function broadcastToMesh(message, exceptPeerId = null) {
+        connections.forEach((conn, peerId) => {
+            if (peerId !== exceptPeerId && conn.open) {
+                conn.send(message);
+            }
+        });
+    }
+
+    function broadcastToTabs(type, data = null) {
+        tabChannel.postMessage({ type, data });
+    }
+
+    tabChannel.onmessage = (event) => {
+        const { type, data, peerId } = event.data;
+        
+        switch(type) {
+            case 'PLAYER_UPDATE':
+                updateLeaderboardDisplay();
+                break;
+            case 'GATE_UPDATE':
+                updateGateUI(data);
+                break;
+            case 'CHAT_MESSAGE':
+                if (!seenChatIds.has(data.id)) {
+                    seenChatIds.add(data.id);
+                    displayChat(data);
+                }
+                break;
+            case 'NEW_PEER':
+                if (peer && peerId !== myPeerId && !connections.has(peerId)) {
+                    connectToPeer(peerId);
+                }
+                break;
+        }
+    };
+
+    // ─── GAME STATE PERSISTENCE ────────────────────────────────
+
+    function loadGameState() {
+        const saved = localStorage.getItem(GAME_STATE_KEY);
+        if (saved) {
+            const state = JSON.parse(saved);
+            gameState = state;
+            state.chat.forEach(msg => seenChatIds.add(msg.id));
+        }
+    }
+
+    function saveGameState() {
+        localStorage.setItem(GAME_STATE_KEY, JSON.stringify(gameState));
+    }
+
+    function updatePeerCount() {
+        document.getElementById('peer-count').innerText = `Mesh Peers: ${connections.size}`;
+    }
+
+    // ─── INITIALIZE ────────────────────────────────────────────
+
+    loadGameState();
+    initMesh();
+
+    // ─── GAME LOGIC ────────────────────────────────────────────
+
+    function initPlayer(race) {
+        console.log('🎮 Initializing player:', currentUser);
+        
+        if (gameState.players[currentUser]) {
+            console.log('📦 Loading saved player');
+            Object.assign(p, gameState.players[currentUser]);
         } else {
-            nav.style.color = "";
-            nav.style.fontWeight = "normal";
-            ui.classList.add('hidden');
-            desc.innerText = "The gate is currently sealed.";
+            console.log('✨ Creating new player');
+            p.race = race || 'Hollow';
+            p.str = p.race === 'Hollow' ? 15 : 10;
+            p.wis = p.race === 'Wraith' ? 15 : 10;
+        }
+        
+        refreshUI();
+        save();
+        
+        gameState.chat.forEach(msg => displayChat(msg));
+        updateGateUI(gameState.gate);
+        
+        sendSystemChat(`${currentUser} has entered the realm!`);
+        
+        setInterval(() => { save(); }, 2000);
+        
+        updateLeaderboardDisplay();
+        updatePlayerCount();
+    }
+
+    function save() {
+        const playerData = {
+            name: currentUser,
+            lvl: Number(p.lvl),
+            gold: Number(p.gold),
+            hp: Number(p.hp),
+            mhp: Number(p.mhp),
+            str: Number(p.str),
+            wis: Number(p.wis),
+            race: p.race,
+            weap: p.weap,
+            lastSeen: Date.now()
+        };
+        
+        gameState.players[currentUser] = playerData;
+        saveGameState();
+        
+        broadcastToMesh({ type: 'PLAYER_UPDATE', player: currentUser, data: playerData });
+        broadcastToTabs('PLAYER_UPDATE');
+    }
+
+    function updatePlayerCount() {
+        document.getElementById('player-count').innerText = `Players: ${Object.keys(gameState.players).length}`;
+    }
+
+    function updateGateUI(gateState) {
+        const desc = document.getElementById('d-desc');
+        const bossUI = document.getElementById('boss-ui');
+        
+        if (gateState === "OPEN") {
+            desc.innerHTML = '<span style="color:var(--admin)">⚡ THE VOID GATE IS OPEN! ⚡</span><br>A Horror from beyond awaits...';
+            bossUI.classList.remove('hidden');
+        } else {
+            desc.innerText = 'The gate is currently sealed.';
+            bossUI.classList.add('hidden');
         }
     }
 
     function displayChat(msg) {
-        const cb = document.getElementById('chat-box');
-        if (!cb) return;
+        if (!msg || !msg.text || !msg.from) return;
         
-        const div = document.createElement('div');
-        div.style.marginBottom = '5px';
+        const box = document.getElementById('chat-box');
+        const time = new Date(msg.time).toLocaleTimeString();
+        const isSystem = msg.from === 'SYSTEM';
+        const color = isSystem ? 'var(--admin)' : (msg.from === currentUser ? 'var(--gold)' : '#fff');
+        const prefix = isSystem ? '[SYSTEM]' : `[${msg.from}]`;
         
-        if (msg.from === 'SYSTEM') {
-            div.innerHTML = `<b style="color:var(--admin)">[SYSTEM]</b> ${msg.text}`;
-        } else {
-            div.innerHTML = `<b style="color:#4a9eff">${msg.from}:</b> <span style="color:#ddd">${msg.text}</span>`;
-        }
+        const msgDiv = document.createElement('div');
+        msgDiv.innerHTML = `<span style="color:#666">${time}</span> <b style="color:${color}">${prefix}</b> ${msg.text}`;
+        box.appendChild(msgDiv);
+        box.scrollTop = box.scrollHeight;
         
-        cb.appendChild(div);
-        cb.scrollTop = cb.scrollHeight;
-        
-        while (cb.children.length > 50) {
-            cb.removeChild(cb.firstChild);
+        while (box.children.length > 50) {
+            box.removeChild(box.firstChild);
         }
     }
 
     function grind() {
-        if(p.hp <= 15) {
-            addLog("<span style='color:red'>Too injured. Rest first.</span>");
+        const baseDmg = Math.floor(Math.random() * 15) + 5;
+        const dmg = Math.max(1, baseDmg - Math.floor(p.wis / 3));
+        
+        p.hp = Math.max(0, p.hp - dmg);
+        
+        if (p.hp === 0) {
+            addLog("<span style='color:red'>💀 YOU DIED 💀</span>");
+            p.hp = p.mhp;
+            p.gold = Math.floor(p.gold * 0.7);
+            refreshUI();
+            save();
             return;
         }
         
-        const dmg = Math.max(3, Math.floor(Math.random() * 8) - Math.floor(p.str/10));
-        const gainGold = Math.floor(Math.random() * 15) + 5;
-        const gainXp = 35 + (p.lvl * 5);
-
-        p.hp = Math.max(0, p.hp - dmg);
+        const baseLoot = Math.floor(Math.random() * 20) + 10;
+        const gainGold = Math.floor(baseLoot * (1 + p.lvl * 0.2));
+        const gainXp = Math.floor(30 + p.lvl * 10);
+        
         p.gold += gainGold;
         p.xp += gainXp;
         
-        if(p.xp >= p.lvl * 200) {
+        const xpNeeded = p.lvl * 100;
+        if (p.xp >= xpNeeded) {
             p.lvl++;
             p.xp = 0;
             p.mhp += 25;
@@ -278,22 +728,6 @@
         addLog("<span style='color:cyan'>✨ Fully healed.</span>");
     }
 
-    function save() {
-        gun.get(REALM).get('players').get(currentUser).put({
-            name: currentUser,
-            lvl: Number(p.lvl),
-            gold: Number(p.gold),
-            hp: Number(p.hp),
-            mhp: Number(p.mhp),
-            str: Number(p.str),
-            wis: Number(p.wis),
-            race: p.race,
-            weap: p.weap,
-            lastSeen: Date.now()
-        });
-        console.log('💾 Saved:', currentUser, p);
-    }
-
     function refreshUI() {
         document.getElementById('s-lvl').innerText = p.lvl;
         document.getElementById('s-hp').innerText = `${Math.floor(p.hp)}/${p.mhp}`;
@@ -301,64 +735,60 @@
     }
 
     function spawnBoss() {
-        gun.get(REALM).get('gate').put("OPEN");
+        gameState.gate = 'OPEN';
+        saveGameState();
+        updateGateUI('OPEN');
+        broadcastToMesh({ type: 'GATE_UPDATE', state: 'OPEN' });
+        broadcastToTabs('GATE_UPDATE', 'OPEN');
         sendSystemChat("🌀 THE VOID MASTER HAS OPENED THE GATE! 🌀");
         addLog("<span style='color:var(--admin)'>Gate OPENED</span>");
     }
 
     function closeBoss() {
-        gun.get(REALM).get('gate').put("CLOSED");
+        gameState.gate = 'CLOSED';
+        saveGameState();
+        updateGateUI('CLOSED');
+        broadcastToMesh({ type: 'GATE_UPDATE', state: 'CLOSED' });
+        broadcastToTabs('GATE_UPDATE', 'CLOSED');
         sendSystemChat("🌀 THE VOID MASTER HAS CLOSED THE GATE! 🌀");
         addLog("<span style='color:var(--admin)'>Gate CLOSED</span>");
     }
 
     function loadLeaderboard() {
+        updateLeaderboardDisplay();
+    }
+
+    function updateLeaderboardDisplay() {
         const list = document.getElementById('leaderboard-list');
         const debug = document.getElementById('lb-debug');
         
-        let players = {};
-        let count = 0;
+        const players = Object.values(gameState.players);
+        debug.innerText = `${players.length} player(s) in realm`;
+        updatePlayerCount();
         
-        gun.get(REALM).get('players').map().once((data, key) => {
-            if (data && data.name) {
-                count++;
-                players[data.name] = {
-                    name: data.name,
-                    lvl: Number(data.lvl) || 1,
-                    gold: Number(data.gold) || 0,
-                    lastSeen: data.lastSeen || 0
-                };
-                console.log('👤 Found player:', data.name, data);
-            }
+        if (players.length === 0) {
+            list.innerHTML = '<div style="color:#666;">No players yet...</div>';
+            return;
+        }
+        
+        const sorted = players.sort((a, b) => {
+            if (b.lvl !== a.lvl) return b.lvl - a.lvl;
+            return b.gold - a.gold;
         });
         
-        setTimeout(() => {
-            debug.innerText = `Found ${count} player(s) in database`;
-            
-            const sorted = Object.values(players).sort((a, b) => {
-                if (b.lvl !== a.lvl) return b.lvl - a.lvl;
-                return b.gold - a.gold;
-            });
-            
-            if (sorted.length === 0) {
-                list.innerHTML = '<div>No players found</div>';
-                return;
-            }
-            
-            list.innerHTML = sorted.map((pl, i) => {
-                const isAdmin = pl.name === ADMIN ? '<span style="color:var(--admin)">(Void Master)</span>' : '';
-                const isYou = pl.name === currentUser ? '<span style="color:var(--gold)"> ← YOU</span>' : '';
-                const online = (Date.now() - pl.lastSeen < 5000) ? '🟢' : '⚫';
-                return `<div style="padding:8px; border-bottom:1px solid #222;">
-                    ${online} ${i+1}. <b>${pl.name}</b> ${isAdmin}${isYou} - Lvl ${pl.lvl} | ${pl.gold}g
-                </div>`;
-            }).join("");
-            
-            const myRank = sorted.findIndex(pl => pl.name === currentUser) + 1;
-            document.getElementById('my-rank').innerText = myRank > 0 
-                ? `⚔️ YOUR RANK: #${myRank} of ${sorted.length}` 
-                : 'Not ranked yet';
-        }, 1000);
+        list.innerHTML = sorted.map((pl, i) => {
+            const isAdmin = pl.name === ADMIN ? '<span style="color:var(--admin)">(Void Master)</span>' : '';
+            const isYou = pl.name === currentUser ? '<span style="color:var(--gold)"> ← YOU</span>' : '';
+            const online = (Date.now() - pl.lastSeen < 6000) ? '🟢' : '⚫';
+            return `<div style="padding:8px; border-bottom:1px solid #222;">
+                ${online} ${i+1}. <b>${pl.name}</b> ${isAdmin}${isYou} - Lvl ${pl.lvl} | ${pl.gold}g | ${pl.race}
+            </div>`;
+        }).join("");
+        
+        const myRank = sorted.findIndex(pl => pl.name === currentUser) + 1;
+        document.getElementById('my-rank').innerText = myRank > 0 
+            ? `⚔️ YOUR RANK: #${myRank} of ${sorted.length}` 
+            : 'Not ranked yet';
     }
 
     function refreshShop() {
@@ -411,7 +841,6 @@
         p.xp += 200;
         
         addLog(`<span style='color:var(--admin)'>⚡ Battled Horror! +${reward}g, +200xp | -${dmg}hp</span>`);
-        sendSystemChat(`${currentUser} has challenged the Horror!`);
         
         refreshUI();
         save();
@@ -422,22 +851,41 @@
         const text = input.value.trim();
         if (!text) return;
         
-        gun.get(REALM).get('chat').set({
+        const msg = {
+            id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
             from: currentUser,
             text: text,
             time: Date.now()
-        });
+        };
+        
+        seenChatIds.add(msg.id);
+        gameState.chat.push(msg);
+        if (gameState.chat.length > 100) gameState.chat.shift();
+        saveGameState();
+        
+        displayChat(msg);
+        broadcastToMesh({ type: 'CHAT_MESSAGE', msg });
+        broadcastToTabs('CHAT_MESSAGE', msg);
         
         input.value = "";
-        console.log('📤 Sent chat:', text);
     }
 
     function sendSystemChat(text) {
-        gun.get(REALM).get('chat').set({
+        const msg = {
+            id: 'sys_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
             from: 'SYSTEM',
             text: text,
             time: Date.now()
-        });
+        };
+        
+        seenChatIds.add(msg.id);
+        gameState.chat.push(msg);
+        if (gameState.chat.length > 100) gameState.chat.shift();
+        saveGameState();
+        
+        displayChat(msg);
+        broadcastToMesh({ type: 'CHAT_MESSAGE', msg });
+        broadcastToTabs('CHAT_MESSAGE', msg);
     }
 
     function addLog(m) {
