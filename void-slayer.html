@@ -2,23 +2,25 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>VOID-SLAYER | P2P Mesh MMORPG</title>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <style>
         :root { --bg: #050508; --panel: #111116; --accent: #8b0000; --gold: #d4af37; --text: #aaa; --admin: #ff00ff; }
-        body { background: var(--bg); color: var(--text); font-family: 'Crimson Text', serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
-        nav { width: 220px; background: var(--panel); border-right: 1px solid #222; display: flex; flex-direction: column; padding: 20px; }
+        * { box-sizing: border-box; }
+        body { background: var(--bg); color: var(--text); font-family: 'Crimson Text', serif; margin: 0; display: flex; height: 100vh; height: 100dvh; overflow: hidden; }
+        nav { width: 220px; min-width: 220px; background: var(--panel); border-right: 1px solid #222; display: flex; flex-direction: column; padding: 20px; overflow-y: auto; }
         .nav-link { color: #666; padding: 12px 10px; border-bottom: 1px solid #1a1a1a; cursor: pointer; transition: 0.2s; font-size: 0.95rem; }
         .nav-link:hover { color: #fff; background: #1a1a1f; padding-left: 15px; }
-        main { flex: 1; display: flex; flex-direction: column; }
-        #stats-bar { background: #000; padding: 15px 30px; border-bottom: 1px solid #222; display: flex; gap: 40px; font-family: monospace; font-size: 0.9rem; align-items: center; }
+        main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        #stats-bar { background: #000; padding: 10px 20px; border-bottom: 1px solid #222; display: flex; gap: 20px; font-family: monospace; font-size: 0.85rem; align-items: center; flex-wrap: wrap; }
         .stat-val { color: var(--gold); font-weight: bold; }
-        .content { flex: 1; padding: 40px; overflow-y: auto; background: radial-gradient(circle at top, #16161d 0%, #050508 100%); }
-        .card { background: rgba(20, 20, 25, 0.98); border: 1px solid #333; padding: 25px; margin-bottom: 20px; }
-        .action-btn { background: #222; border: 1px solid #444; color: #ccc; padding: 12px 24px; cursor: pointer; text-transform: uppercase; margin: 5px; font-family: inherit; }
+        .content { flex: 1; padding: 20px; overflow-y: auto; background: radial-gradient(circle at top, #16161d 0%, #050508 100%); }
+        .card { background: rgba(20, 20, 25, 0.98); border: 1px solid #333; padding: 20px; margin-bottom: 15px; }
+        .action-btn { background: #222; border: 1px solid #444; color: #ccc; padding: 10px 20px; cursor: pointer; text-transform: uppercase; margin: 4px; font-family: inherit; font-size: 0.85rem; }
         .action-btn:hover { background: var(--accent); color: white; border-color: red; }
         #game-log { height: 160px; overflow-y: auto; border-top: 1px solid #222; padding-top: 10px; font-size: 0.85rem; color: #888; margin-top: 20px; }
-        #auth-screen { position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+        #auth-screen { position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 20px; overflow-y: auto; }
         input, select { background: #111; border: 1px solid #333; color: white; padding: 12px; margin-bottom: 12px; width: 260px; box-sizing: border-box; }
         .hidden { display: none; }
         .debug { font-size: 0.75rem; color: #555; margin-top: 10px; font-family: monospace; }
@@ -39,6 +41,29 @@
         .realm-info { font-size: 0.75rem; color: #555; text-align: center; margin-top: -5px; margin-bottom: 10px; }
         .name-link { color: inherit; cursor: pointer; text-decoration: none; border-bottom: 1px dotted #555; transition: 0.15s; }
         .name-link:hover { color: var(--gold); border-bottom-color: var(--gold); }
+
+        /* Mobile hamburger */
+        #mobile-header { display: none; background: var(--panel); padding: 10px 15px; border-bottom: 1px solid #222; align-items: center; justify-content: space-between; z-index: 50; }
+        #menu-toggle { background: none; border: 1px solid #444; color: #ccc; font-size: 1.3rem; padding: 6px 12px; cursor: pointer; font-family: inherit; }
+        #nav-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 98; }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            #mobile-header { display: flex; }
+            nav { position: fixed; top: 0; left: -280px; width: 260px; min-width: 260px; height: 100%; z-index: 99; transition: left 0.3s ease; padding-top: 15px; }
+            nav.open { left: 0; }
+            #nav-overlay.open { display: block; }
+            main { flex: 1; }
+            #stats-bar { padding: 8px 12px; gap: 10px; font-size: 0.75rem; }
+            .content { padding: 12px; }
+            .card { padding: 15px; }
+            .action-btn { padding: 10px 16px; font-size: 0.8rem; }
+            #auth-screen { padding: 15px; }
+            .auth-card { padding: 20px 15px; }
+            input, select { width: 100%; }
+            #chat-in { width: 65% !important; }
+        }
     </style>
 </head>
 <body>
@@ -104,15 +129,18 @@
     </div>
 </div>
 
-<nav>
+<div id="nav-overlay" onclick="closeMenu()"></div>
+
+<nav id="main-nav">
     <h2 style="color:var(--accent)">VOID MENU</h2>
-    <div class="nav-link" onclick="showTab('grind')">The Frontier</div>
-    <div id="nav-dungeon" class="nav-link" onclick="showTab('dungeon')">The Void Gate</div>
-    <div class="nav-link" onclick="showTab('lead'); loadLeaderboard();">Leaderboard</div>
-    <div class="nav-link" onclick="showTab('shop'); refreshShop();">Black Market</div>
-    <div class="nav-link" onclick="showTab('pvp'); refreshPvpTargets();">The Arena</div>
-    <div class="nav-link" onclick="showTab('guild'); refreshGuildUI();">Guild Hall</div>
-    <div class="nav-link" onclick="showTab('chat')">Tavern</div>
+    <div class="nav-link" onclick="goTab('grind')">The Frontier</div>
+    <div id="nav-dungeon" class="nav-link" onclick="goTab('dungeon')">The Void Gate</div>
+    <div class="nav-link" onclick="goTab('lead'); loadLeaderboard();">Leaderboard</div>
+    <div class="nav-link" onclick="goTab('shop'); refreshShop();">Black Market</div>
+    <div class="nav-link" onclick="goTab('pvp'); refreshPvpTargets();">The Arena</div>
+    <div class="nav-link" onclick="goTab('guild'); refreshGuildUI();">Guild Hall</div>
+    <div class="nav-link" onclick="goTab('chat')">Tavern</div>
+    <div class="nav-link" onclick="goTab('news'); refreshNews();">News</div>
     <div class="debug" style="margin-top: auto; padding-top: 20px;">
         <div id="peer-count">Mesh Peers: 0</div>
         <div id="player-count">Players: 0</div>
@@ -121,6 +149,11 @@
 </nav>
 
 <main>
+    <div id="mobile-header">
+        <button id="menu-toggle" onclick="toggleMenu()">☰ Menu</button>
+        <span style="color:var(--accent); font-weight:bold; letter-spacing:2px;">VOID-SLAYER</span>
+        <span id="mobile-lvl" style="color:var(--gold); font-family:monospace; font-size:0.8rem;">Lv.1</span>
+    </div>
     <div id="stats-bar">
         <span>LVL: <span id="s-lvl" class="stat-val">1</span></span>
         <span>HP: <span id="s-hp" class="stat-val">100/100</span></span>
@@ -133,12 +166,6 @@
     </div>
 
     <div class="content">
-        <div id="admin-controls" class="hidden card" style="border: 2px dashed var(--admin);">
-            <h4 style="color:var(--admin); margin:0 0 10px 0;">ADMIN: VOID MASTER</h4>
-            <button class="action-btn" onclick="spawnBoss()">SPAWN BOSS</button>
-            <button class="action-btn" onclick="closeBoss()">CLOSE GATE</button>
-        </div>
-
         <section id="tab-grind">
             <div class="card">
                 <h3 style="color:var(--accent); margin-top:0;">The Frontier</h3>
@@ -160,6 +187,11 @@
 
         <section id="tab-shop" class="hidden"><div class="card"><h3>Black Market</h3><div id="shop-items"></div></div></section>
         <section id="tab-dungeon" class="hidden">
+            <div id="admin-controls" class="hidden card" style="border: 2px dashed var(--admin);">
+                <h4 style="color:var(--admin); margin:0 0 10px 0;">VOID MASTER CONTROLS</h4>
+                <button class="action-btn" onclick="spawnBoss()">SPAWN BOSS</button>
+                <button class="action-btn" onclick="closeBoss()">CLOSE GATE</button>
+            </div>
             <div class="card">
                 <h3>Void Gate</h3>
                 <p id="d-desc">The gate is currently sealed.</p>
@@ -172,8 +204,10 @@
             <div class="card">
                 <h3>The Tavern</h3>
                 <div id="chat-box" style="height:200px; overflow-y:auto; background:#000; padding:10px; margin-bottom:10px;"></div>
-                <input id="chat-in" style="width:70%;" onkeypress="if(event.key==='Enter')sendChat()">
-                <button class="action-btn" onclick="sendChat()">Send</button>
+                <div style="display:flex; gap:5px;">
+                    <input id="chat-in" style="flex:1; width:auto;" onkeypress="if(event.key==='Enter')sendChat()">
+                    <button class="action-btn" onclick="sendChat()" style="margin:0;">Send</button>
+                </div>
             </div>
         </section>
         <section id="tab-pvp" class="hidden">
@@ -231,6 +265,19 @@
                 </div>
             </div>
         </section>
+        <section id="tab-news" class="hidden">
+            <div class="card">
+                <h3 style="color:var(--accent); margin-top:0;">📜 Realm News</h3>
+                <p style="color:#666; font-size:0.85rem;">Proclamations from the Void Master.</p>
+                <div id="news-admin-post" class="hidden" style="margin-bottom:20px; padding:15px; border:1px dashed var(--admin); background:rgba(255,0,255,0.03);">
+                    <h4 style="color:var(--admin); margin:0 0 10px 0;">Post News</h4>
+                    <input type="text" id="news-title-input" placeholder="Title" style="width:100%; margin-bottom:8px;">
+                    <textarea id="news-body-input" placeholder="News body..." style="width:100%; height:80px; background:#111; border:1px solid #333; color:white; padding:10px; font-family:inherit; resize:vertical;"></textarea>
+                    <button class="action-btn" onclick="postNews()" style="margin-top:8px;">📜 Publish</button>
+                </div>
+                <div id="news-list"><span style="color:#555;">No news yet...</span></div>
+            </div>
+        </section>
         <section id="tab-profile" class="hidden">
             <div id="profile-content"></div>
         </section>
@@ -250,8 +297,9 @@
     let seenChatIds = new Set();
     let gameState = {
         players: {},
-        guilds: {},   // { guildName: { leader, members: [], created } }
-        wars: [],     // [{ id, attacker, defender, scores: {att:0, def:0}, goal:10, started, ended, winner }]
+        guilds: {},
+        wars: [],
+        news: [],     // [{ id, title, body, author, time }]
         gate: 'CLOSED',
         chat: []
     };
@@ -565,14 +613,21 @@
             case 'GUILD_UPDATE':
                 gameState.guilds = data.guilds;
                 saveGameState();
-                broadcastToTabs('GUILD_UPDATE');
+                broadcastToTabs('GUILD_UPDATE', gameState.guilds);
                 broadcastToMesh(data, conn.peer);
                 break;
 
             case 'WAR_UPDATE':
                 gameState.wars = data.wars;
                 saveGameState();
-                broadcastToTabs('WAR_UPDATE');
+                broadcastToTabs('WAR_UPDATE', gameState.wars);
+                broadcastToMesh(data, conn.peer);
+                break;
+
+            case 'NEWS_UPDATE':
+                if (data.news) gameState.news = data.news;
+                saveGameState();
+                broadcastToTabs('NEWS_UPDATE', gameState.news);
                 broadcastToMesh(data, conn.peer);
                 break;
         }
@@ -657,6 +712,17 @@
                 }
             });
         }
+
+        // Merge news (keep most entries)
+        if (incomingState.news && incomingState.news.length > 0) {
+            if (!gameState.news) gameState.news = [];
+            incomingState.news.forEach(item => {
+                if (!gameState.news.find(n => n.id === item.id)) {
+                    gameState.news.push(item);
+                }
+            });
+            gameState.news.sort((a, b) => b.time - a.time);
+        }
         
         saveGameState();
         updateLeaderboardDisplay();
@@ -706,6 +772,9 @@
             case 'WAR_UPDATE':
                 if (data) gameState.wars = data;
                 break;
+            case 'NEWS_UPDATE':
+                if (data) gameState.news = data;
+                break;
         }
     };
 
@@ -722,6 +791,7 @@
         // No-op — fresh state each session. Peers will FULL_SYNC on connect.
         if (!gameState.guilds) gameState.guilds = {};
         if (!gameState.wars) gameState.wars = [];
+        if (!gameState.news) gameState.news = [];
     }
 
     function updatePeerCount() {
@@ -882,6 +952,9 @@
         if (currentUser) {
             document.getElementById('s-name').innerText = `${p.avatar || '💀'} ${currentUser}`;
         }
+        // Mobile header level
+        const mobileLvl = document.getElementById('mobile-lvl');
+        if (mobileLvl) mobileLvl.innerText = `Lv.${p.lvl}`;
     }
 
     function spawnBoss() {
@@ -1859,6 +1932,108 @@
     function showTab(id) {
         document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
         document.getElementById('tab-' + id).classList.remove('hidden');
+        
+        // Scroll chat to bottom when opening tavern
+        if (id === 'chat') {
+            setTimeout(() => {
+                const box = document.getElementById('chat-box');
+                if (box) box.scrollTop = box.scrollHeight;
+            }, 50);
+        }
+    }
+
+    // goTab: showTab + close mobile menu
+    function goTab(id) {
+        showTab(id);
+        closeMenu();
+    }
+
+    // ─── MOBILE MENU ──────────────────────────────────────────
+
+    function toggleMenu() {
+        document.getElementById('main-nav').classList.toggle('open');
+        document.getElementById('nav-overlay').classList.toggle('open');
+    }
+
+    function closeMenu() {
+        document.getElementById('main-nav').classList.remove('open');
+        document.getElementById('nav-overlay').classList.remove('open');
+    }
+
+    // ─── NEWS SYSTEM ──────────────────────────────────────────
+
+    function postNews() {
+        if (currentUser !== ADMIN) return;
+        
+        const title = document.getElementById('news-title-input').value.trim();
+        const body = document.getElementById('news-body-input').value.trim();
+        
+        if (!title || !body) {
+            addLog("<span style='color:red'>News needs a title and body.</span>");
+            return;
+        }
+
+        if (!gameState.news) gameState.news = [];
+
+        const item = {
+            id: 'news_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            title: title,
+            body: body,
+            author: currentUser,
+            time: Date.now()
+        };
+
+        gameState.news.unshift(item);
+        if (gameState.news.length > 50) gameState.news = gameState.news.slice(0, 50);
+
+        saveGameState();
+        broadcastToMesh({ type: 'NEWS_UPDATE', news: gameState.news });
+        broadcastToTabs('NEWS_UPDATE', gameState.news);
+
+        document.getElementById('news-title-input').value = '';
+        document.getElementById('news-body-input').value = '';
+
+        refreshNews();
+        sendSystemChat(`📜 New proclamation: "${title}"`);
+        addLog("<span style='color:var(--gold)'>News published!</span>");
+    }
+
+    function deleteNews(newsId) {
+        if (currentUser !== ADMIN) return;
+        gameState.news = gameState.news.filter(n => n.id !== newsId);
+        saveGameState();
+        broadcastToMesh({ type: 'NEWS_UPDATE', news: gameState.news });
+        broadcastToTabs('NEWS_UPDATE', gameState.news);
+        refreshNews();
+    }
+
+    function refreshNews() {
+        if (!gameState.news) gameState.news = [];
+        const listEl = document.getElementById('news-list');
+        const adminPost = document.getElementById('news-admin-post');
+
+        if (currentUser === ADMIN && adminPost) {
+            adminPost.classList.remove('hidden');
+        }
+
+        if (gameState.news.length === 0) {
+            listEl.innerHTML = '<span style="color:#555;">No news yet...</span>';
+            return;
+        }
+
+        listEl.innerHTML = gameState.news.map(item => {
+            const dateStr = new Date(item.time).toLocaleString();
+            const deleteBtn = currentUser === ADMIN ? 
+                `<button class="action-btn" onclick="deleteNews('${item.id}')" style="padding:4px 10px; font-size:0.75rem; margin:0;">✕ Delete</button>` : '';
+            return `<div class="card" style="border-left:3px solid var(--admin);">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <h4 style="color:var(--gold); margin:0 0 8px 0;">📜 ${item.title}</h4>
+                    ${deleteBtn}
+                </div>
+                <p style="color:#ccc; margin:0 0 10px 0; white-space:pre-wrap;">${item.body}</p>
+                <div style="font-size:0.75rem; color:#555;">— ${item.author} · ${dateStr}</div>
+            </div>`;
+        }).join('');
     }
 </script>
 </body>
