@@ -6,8 +6,9 @@ This repo is dedicated to my single page web apps, programming and other scripti
 
 ## APPS LIST
 
-### void-slayer.html
+### void-slayer.html (WIP)
 * peer-to-peer persistent text based MMORPG in browser. Inspired by *my* favorite games! I plan on ongoing development! The world is only persistent as long as one player is online.
+* NOTE: not all features are currently functioning, and there seems to be a couple bugs, so.. I will work on this later to hopefully fix that.
 * github.io link: https://boyolabs.github.io/main-dev/void-slayer.html
 
 ### tracker.html
