@@ -1,4 +1,4 @@
-<!DOCTYPE ht<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -124,7 +124,7 @@
         </div>
         <div class="realm-info">All players in the same realm share the same cloud database.</div>
 
-        <div class="debug" id="connection-status">Initializing Cloud Sync...</div>
+        <div class="debug" id="connection-status">Initializing...</div>
     </div>
 </div>
 
@@ -305,26 +305,90 @@
         }
     }
 
+    // ============================================
+    // LOCAL STORAGE (Primary — always works)
+    // ============================================
+    let cloudAvailable = false; // set true after first successful cloud request
+
+    function getAccounts() {
+        const realm = document.getElementById('realm-name')?.value.trim() || 'void-realm-default';
+        const key = `void-accounts-${realm}`;
+        const stored = localStorage.getItem(key);
+        return stored ? JSON.parse(stored) : {};
+    }
+
+    function saveAccounts(accounts) {
+        const realm = document.getElementById('realm-name')?.value.trim() || 'void-realm-default';
+        const key = `void-accounts-${realm}`;
+        localStorage.setItem(key, JSON.stringify(accounts));
+    }
+
+    function getLocalGameState() {
+        const realm = document.getElementById('realm-name')?.value.trim() || 'void-realm-default';
+        const key = `void-gamestate-${realm}`;
+        const stored = localStorage.getItem(key);
+        return stored ? JSON.parse(stored) : null;
+    }
+
+    function saveLocalGameState() {
+        const realm = document.getElementById('realm-name')?.value.trim() || 'void-realm-default';
+        const key = `void-gamestate-${realm}`;
+        localStorage.setItem(key, JSON.stringify({
+            players: gameState.players,
+            guilds: gameState.guilds,
+            wars: gameState.wars,
+            news: gameState.news,
+            gate: gameState.gate,
+            chat: gameState.chat
+        }));
+    }
+
+    function loadLocalGameState() {
+        const gs = getLocalGameState();
+        if (gs) {
+            if (gs.players) gameState.players = gs.players;
+            if (gs.guilds) gameState.guilds = gs.guilds;
+            if (gs.wars) gameState.wars = gs.wars;
+            if (gs.news) gameState.news = gs.news;
+            if (gs.gate) gameState.gate = gs.gate;
+            if (gs.chat) {
+                gameState.chat = gs.chat;
+                gs.chat.forEach(msg => seenChatIds.add(msg.id));
+            }
+            return true;
+        }
+        return false;
+    }
+
+    function saveGameState() {
+        markDirty();
+    }
+
+    // ============================================
+    // CLOUD SYNC (Enhancement — fails gracefully)
+    // ============================================
+
     async function loadFromCloud() {
         try {
             updateCloudStatus('Loading...', '#ffaa00');
             const realm = document.getElementById('realm-name').value.trim() || 'void-realm-default';
             
-            const response = await fetch(`${CLOUD_CONFIG.webAppUrl}?realm=${encodeURIComponent(realm)}&action=load`);
+            const response = await fetch(`${CLOUD_CONFIG.webAppUrl}?realm=${encodeURIComponent(realm)}&action=load`, {
+                redirect: 'follow'
+            });
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             
-            const data = await response.json();
+            const text = await response.text();
+            const data = JSON.parse(text);
             
             if (data.success && data.data) {
-                // Load accounts
                 if (data.data.accounts) {
                     saveAccounts(data.data.accounts);
                 }
                 
-                // Load game state
                 if (data.data.gameState) {
                     const gs = data.data.gameState;
                     if (gs.players) gameState.players = gs.players;
@@ -338,28 +402,53 @@
                     }
                 }
                 
+                // Cloud loaded successfully — also save to localStorage as cache
+                saveLocalGameState();
+                cloudAvailable = true;
                 updateCloudStatus('Connected', '#44ff44');
                 addLog("<span style='color:#44ff44'>✓ Loaded from cloud</span>");
                 return true;
             } else {
-                // No data yet in cloud, that's okay
+                cloudAvailable = true;
                 updateCloudStatus('Connected (empty)', '#ffaa00');
                 return true;
             }
         } catch (err) {
             console.error('Cloud load error:', err);
-            updateCloudStatus('Load failed', '#ff4444');
-            addLog("<span style='color:#ff4444'>⚠ Could not load from cloud: " + err.message + "</span>");
+            cloudAvailable = false;
+            updateCloudStatus('Local mode', '#ffaa00');
+            
+            // Fall back to localStorage
+            if (loadLocalGameState()) {
+                addLog("<span style='color:#ffaa00'>⚠ Cloud unavailable — loaded local save</span>");
+            } else {
+                addLog("<span style='color:#ffaa00'>⚠ Cloud unavailable — starting fresh locally</span>");
+            }
+
+            // Helpful hint if opened from file://
+            if (location.protocol === 'file:') {
+                addLog("<span style='color:#ff8844'>Tip: Serve this file from a web server for cloud sync.</span>");
+                addLog("<span style='color:#ff8844'>Run: python -m http.server 8000</span>");
+            }
             return false;
         }
     }
 
     async function saveToCloud(force = false) {
+        // Always save to localStorage first
+        saveLocalGameState();
+
         if (!force && !isDirty) {
-            updateCloudStatus('Idle', '#888');
+            if (cloudAvailable) updateCloudStatus('Idle', '#888');
             return true;
         }
         
+        // If cloud isn't available, just save locally
+        if (!cloudAvailable) {
+            isDirty = false;
+            return true;
+        }
+
         try {
             updateCloudStatus('Saving...', '#ffaa00');
             const realm = document.getElementById('realm-name').value.trim() || 'void-realm-default';
@@ -380,6 +469,7 @@
             
             const response = await fetch(CLOUD_CONFIG.webAppUrl, {
                 method: 'POST',
+                redirect: 'follow',
                 headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify(payload)
             });
@@ -388,14 +478,14 @@
                 throw new Error(`HTTP ${response.status}`);
             }
             
-            const result = await response.json();
+            const text = await response.text();
+            const result = JSON.parse(text);
             
             if (result.success) {
                 isDirty = false;
                 lastSyncTime = Date.now();
                 updateCloudStatus('Synced', '#44ff44');
                 
-                // Auto-hide success message after 2 seconds
                 setTimeout(() => {
                     if (!isDirty) {
                         updateCloudStatus('Idle', '#888');
@@ -408,7 +498,9 @@
             }
         } catch (err) {
             console.error('Cloud save error:', err);
-            updateCloudStatus('Save failed', '#ff4444');
+            cloudAvailable = false;
+            updateCloudStatus('Local mode', '#ffaa00');
+            isDirty = false; // Already saved locally
             return false;
         }
     }
@@ -416,28 +508,31 @@
     function markDirty() {
         isDirty = true;
         
-        // Clear existing timer
+        // Always save to localStorage immediately
+        saveLocalGameState();
+        
+        // Clear existing cloud save timer
         if (autoSaveTimer) {
             clearTimeout(autoSaveTimer);
         }
         
-        // Set new timer for auto-save after brief delay
+        // Attempt cloud save after delay
         autoSaveTimer = setTimeout(() => {
             saveToCloud();
         }, CLOUD_CONFIG.autoSaveDelay);
     }
 
     function startCloudSync() {
-        // Start heartbeat timer
         if (cloudSyncTimer) {
             clearInterval(cloudSyncTimer);
         }
         
         cloudSyncTimer = setInterval(() => {
-            saveToCloud(); // Will only save if dirty
+            saveToCloud();
         }, CLOUD_CONFIG.heartbeatInterval);
         
-        addLog("<span style='color:#44ff44'>Cloud sync started (60s heartbeat)</span>");
+        const mode = cloudAvailable ? 'Cloud sync' : 'Local autosave';
+        addLog(`<span style='color:#44ff44'>${mode} started</span>`);
     }
 
     function stopCloudSync() {
@@ -449,28 +544,6 @@
             clearTimeout(autoSaveTimer);
             autoSaveTimer = null;
         }
-    }
-
-    // ============================================
-    // LOCAL STORAGE (Accounts only)
-    // ============================================
-    function getAccounts() {
-        const realm = document.getElementById('realm-name')?.value.trim() || 'void-realm-default';
-        const key = `void-accounts-${realm}`;
-        const stored = localStorage.getItem(key);
-        return stored ? JSON.parse(stored) : {};
-    }
-
-    function saveAccounts(accounts) {
-        const realm = document.getElementById('realm-name')?.value.trim() || 'void-realm-default';
-        const key = `void-accounts-${realm}`;
-        localStorage.setItem(key, JSON.stringify(accounts));
-    }
-
-    function saveGameState() {
-        // Legacy function - no longer saves to localStorage
-        // State is now auto-synced to cloud via dirty flag
-        markDirty();
     }
 
     // ============================================
@@ -1357,6 +1430,8 @@
     // ============================================
     window.addEventListener('load', () => {
         updateCloudStatus('Ready', '#888');
+        const statusEl = document.getElementById('connection-status');
+        if (statusEl) statusEl.textContent = location.protocol === 'file:' ? 'Local mode (serve via web server for cloud sync)' : 'Ready — cloud sync available';
         goTab('grind');
         
         // Periodic player count update
@@ -1372,7 +1447,8 @@
     window.addEventListener('beforeunload', () => {
         if (currentUser && p) {
             p.online = false;
-            saveToCloud(true); // Force final save
+            saveLocalGameState(); // Always save locally
+            saveToCloud(true); // Attempt final cloud save
         }
         stopCloudSync();
     });
