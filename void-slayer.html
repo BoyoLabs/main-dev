@@ -147,6 +147,7 @@
     <div class="nav-link" onclick="goTab('shop'); refreshShop();">Black Market</div>
     <div class="nav-link" onclick="goTab('pvp'); refreshPvpTargets();">The Arena</div>
     <div class="nav-link" onclick="goTab('guild'); refreshGuildUI();">Guild Hall</div>
+    <div class="nav-link" onclick="goTab('wars'); refreshWarsUI();">Guild Wars</div>
     <div class="nav-link" onclick="goTab('chat')">Tavern</div>
     <div class="nav-link" onclick="goTab('profile')">Profile</div>
     <div class="nav-link" onclick="goTab('news'); refreshNews();">News</div>
@@ -226,6 +227,24 @@
             <div class="card">
                 <h2>Guild Hall</h2>
                 <div id="guild-content"></div>
+            </div>
+        </div>
+
+        <!-- WARS TAB -->
+        <div id="tab-wars" class="hidden">
+            <div class="card">
+                <h2>⚔️ Guild Wars</h2>
+                <p style="color:#888;">Guilds battle for supremacy. First to 20,000 frontier kills wins!</p>
+                
+                <div id="active-wars-section" style="margin-top:20px;">
+                    <h3 style="color:var(--accent);">Active Wars</h3>
+                    <div id="active-wars-list"></div>
+                </div>
+                
+                <div id="war-history-section" style="margin-top:30px;">
+                    <h3 style="color:#888;">War History</h3>
+                    <div id="war-history-list"></div>
+                </div>
             </div>
         </div>
 
@@ -907,6 +926,11 @@
         p.gold += goldGain;
         p.kills++;
         
+        // Track war kills if in active war
+        if (p.guild) {
+            checkAndUpdateWarKills(p.guild);
+        }
+        
         addLog(`You slay a Void Wraith. <span style="color:var(--gold)">+${xpGain} XP, +${goldGain} Gold</span>`);
         
         while (p.xp >= p.level * 100) {
@@ -1355,6 +1379,18 @@
         const choice = prompt(`Declare war on:\n${targetGuilds}\n\nEnter guild ID:`);
         if (!choice || !gameState.guilds[choice]) return;
         
+        // Check if already at war
+        const existingWar = gameState.wars.find(w => 
+            w.status === 'active' && 
+            ((w.attacker === p.guild && w.defender === choice) || 
+             (w.attacker === choice && w.defender === p.guild))
+        );
+        
+        if (existingWar) {
+            alert('Already at war with this guild!');
+            return;
+        }
+        
         const targetGuild = gameState.guilds[choice];
         
         gameState.wars.push({
@@ -1362,13 +1398,139 @@
             defender: choice,
             attackerTag: guild.tag,
             defenderTag: targetGuild.tag,
-            startedAt: Date.now()
+            attackerName: guild.name,
+            defenderName: targetGuild.name,
+            attackerKills: 0,
+            defenderKills: 0,
+            status: 'active',
+            startedAt: Date.now(),
+            endedAt: null,
+            winner: null
         });
         
         addLog(`<span style="color:#ff4444;">War declared against 【${targetGuild.tag}】!</span>`);
-        sendSystemChat(`⚔ WAR! 【${guild.tag}】 has declared war on 【${targetGuild.tag}】!`);
+        sendSystemChat(`⚔ WAR! 【${guild.tag}】 has declared war on 【${targetGuild.tag}】! First to 20,000 frontier kills wins!`);
         
         markDirty();
+    }
+
+    function checkAndUpdateWarKills(guildId) {
+        // Find active wars involving this guild
+        gameState.wars.forEach(war => {
+            if (war.status === 'active') {
+                if (war.attacker === guildId) {
+                    war.attackerKills++;
+                    checkWarVictory(war);
+                } else if (war.defender === guildId) {
+                    war.defenderKills++;
+                    checkWarVictory(war);
+                }
+            }
+        });
+        markDirty();
+    }
+
+    function checkWarVictory(war) {
+        const VICTORY_KILLS = 20000;
+        
+        if (war.attackerKills >= VICTORY_KILLS) {
+            endWar(war, war.attacker, 'attacker');
+        } else if (war.defenderKills >= VICTORY_KILLS) {
+            endWar(war, war.defender, 'defender');
+        }
+    }
+
+    function endWar(war, winnerGuildId, winnerSide) {
+        const REWARD_PER_PLAYER = 10000;
+        
+        war.status = 'ended';
+        war.endedAt = Date.now();
+        war.winner = winnerGuildId;
+        
+        const winnerGuild = gameState.guilds[winnerGuildId];
+        const loserGuildId = winnerSide === 'attacker' ? war.defender : war.attacker;
+        const loserGuild = gameState.guilds[loserGuildId];
+        
+        if (!winnerGuild || !loserGuild) return;
+        
+        // Award rewards to all members of winning guild
+        let rewardedCount = 0;
+        winnerGuild.members.forEach(memberName => {
+            if (gameState.players[memberName]) {
+                gameState.players[memberName].gold += REWARD_PER_PLAYER;
+                rewardedCount++;
+            }
+        });
+        
+        // Announce victory
+        const finalScore = winnerSide === 'attacker' 
+            ? `${war.attackerKills} - ${war.defenderKills}`
+            : `${war.defenderKills} - ${war.attackerKills}`;
+        
+        sendSystemChat(`🏆 WAR ENDED! 【${winnerGuild.tag}】 has defeated 【${loserGuild.tag}】! Final Score: ${finalScore}. ${rewardedCount} warriors rewarded ${REWARD_PER_PLAYER} gold each!`);
+        
+        addLog(`<span style="color:var(--gold); font-weight:bold;">🏆 Your guild has won the war! +${REWARD_PER_PLAYER} Gold!</span>`);
+        
+        markDirty();
+        refreshUI();
+    }
+
+    function refreshWarsUI() {
+        const activeList = document.getElementById('active-wars-list');
+        const historyList = document.getElementById('war-history-list');
+        
+        if (!activeList || !historyList) return;
+        
+        // Active wars
+        const activeWars = gameState.wars.filter(w => w.status === 'active');
+        
+        if (activeWars.length === 0) {
+            activeList.innerHTML = '<p style="color:#666;">No active wars.</p>';
+        } else {
+            let html = '';
+            activeWars.forEach(war => {
+                const progress = Math.max(war.attackerKills, war.defenderKills) / 20000 * 100;
+                const leading = war.attackerKills > war.defenderKills ? war.attackerTag : war.defenderTag;
+                const leadingKills = Math.max(war.attackerKills, war.defenderKills);
+                
+                html += `<div style="border:1px solid #444; padding:15px; margin-bottom:15px; background:#0a0a0a;">`;
+                html += `<h4 style="margin:0 0 10px 0; color:var(--accent);">【${war.attackerTag}】 vs 【${war.defenderTag}】</h4>`;
+                html += `<div style="display:flex; justify-content:space-between; margin-bottom:8px;">`;
+                html += `<span style="color:#4af;">【${war.attackerTag}】: ${war.attackerKills.toLocaleString()} kills</span>`;
+                html += `<span style="color:#f4a;">【${war.defenderTag}】: ${war.defenderKills.toLocaleString()} kills</span>`;
+                html += `</div>`;
+                html += `<div style="background:#222; height:20px; border:1px solid #444; position:relative; overflow:hidden;">`;
+                html += `<div style="background:linear-gradient(90deg, var(--accent), #ff4444); height:100%; width:${progress}%; transition:width 0.3s;"></div>`;
+                html += `</div>`;
+                html += `<p style="margin:8px 0 0 0; color:#888; font-size:0.85rem;">【${leading}】 leading • ${(20000 - leadingKills).toLocaleString()} kills to victory</p>`;
+                html += `</div>`;
+            });
+            activeList.innerHTML = html;
+        }
+        
+        // War history
+        const endedWars = gameState.wars.filter(w => w.status === 'ended').slice(-10).reverse();
+        
+        if (endedWars.length === 0) {
+            historyList.innerHTML = '<p style="color:#666;">No war history yet.</p>';
+        } else {
+            let html = '<div style="font-family:monospace; font-size:0.85rem;">';
+            endedWars.forEach(war => {
+                const winnerGuild = gameState.guilds[war.winner];
+                const winnerTag = winnerGuild ? winnerGuild.tag : '???';
+                const loserTag = war.winner === war.attacker ? war.defenderTag : war.attackerTag;
+                const duration = Math.floor((war.endedAt - war.startedAt) / 1000 / 60); // minutes
+                const endDate = new Date(war.endedAt).toLocaleDateString();
+                
+                html += `<div style="border-bottom:1px solid #222; padding:10px 0;">`;
+                html += `<span style="color:var(--gold);">🏆 【${winnerTag}】</span> defeated `;
+                html += `<span style="color:#666;">【${loserTag}】</span> `;
+                html += `<span style="color:#888;">(${war.attackerKills.toLocaleString()} - ${war.defenderKills.toLocaleString()}) • ${endDate}</span>`;
+                html += `</div>`;
+            });
+            html += '</div>';
+            historyList.innerHTML = html;
+        }
     }
 
     // ============================================
