@@ -263,7 +263,7 @@
     // CLOUD SYNC CONFIGURATION
     // ============================================
     const CLOUD_CONFIG = {
-        webAppUrl: 'https://script.google.com/macros/s/AKfycbzX6Va08dueRFlyxThBsz3DK_TEg2CsG1uT_00E9Ez0HvU6pCX7sZg74nWcr5R3YYJW/exec',
+        webAppUrl: 'https://script.google.com/macros/s/AKfycbzFnXNFnLlFWPvbwMSfKK3Ag0ikBYDn4vs9ZjGdSNTFffMiJAXFxZ4rzu9VnzKjquq7/exec',
         sheetId: '1EblrSWCeDCgOVLB3wJ9rkQ56-SdThchkcpaa3bR4Bas',
         heartbeatInterval: 60000, // 60 seconds
         autoSaveDelay: 3000 // 3 seconds after marking dirty
@@ -414,22 +414,17 @@
                 return true;
             }
         } catch (err) {
-            console.error('Cloud load error:', err);
+            console.warn('Cloud sync unavailable:', err.message);
             cloudAvailable = false;
             updateCloudStatus('Local mode', '#ffaa00');
             
             // Fall back to localStorage
             if (loadLocalGameState()) {
-                addLog("<span style='color:#ffaa00'>⚠ Cloud unavailable — loaded local save</span>");
+                addLog("<span style='color:#ffaa00'>Playing in local mode — progress saved to this browser</span>");
             } else {
-                addLog("<span style='color:#ffaa00'>⚠ Cloud unavailable — starting fresh locally</span>");
+                addLog("<span style='color:#ffaa00'>Playing in local mode — new game started</span>");
             }
 
-            // Helpful hint if opened from file://
-            if (location.protocol === 'file:') {
-                addLog("<span style='color:#ff8844'>Tip: Serve this file from a web server for cloud sync.</span>");
-                addLog("<span style='color:#ff8844'>Run: python -m http.server 8000</span>");
-            }
             return false;
         }
     }
@@ -497,7 +492,7 @@
                 throw new Error(result.error || 'Save failed');
             }
         } catch (err) {
-            console.error('Cloud save error:', err);
+            console.warn('Cloud save unavailable:', err.message);
             cloudAvailable = false;
             updateCloudStatus('Local mode', '#ffaa00');
             isDirty = false; // Already saved locally
@@ -1431,7 +1426,7 @@
     window.addEventListener('load', () => {
         updateCloudStatus('Ready', '#888');
         const statusEl = document.getElementById('connection-status');
-        if (statusEl) statusEl.textContent = location.protocol === 'file:' ? 'Local mode (serve via web server for cloud sync)' : 'Ready — cloud sync available';
+        if (statusEl) statusEl.textContent = 'Ready — local save active';
         goTab('grind');
         
         // Periodic player count update
