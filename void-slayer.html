@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE ht<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -263,7 +263,7 @@
     // CLOUD SYNC CONFIGURATION
     // ============================================
     const CLOUD_CONFIG = {
-        webAppUrl: 'https://script.google.com/macros/s/AKfycbzRj1TqeD9M_k84dcgfj3AduBjTq4DJittWqaLfAzXmNU8NpWZh7TP5gMEEo2q22HbJ/exec',
+        webAppUrl: 'https://script.google.com/macros/s/AKfycbzX6Va08dueRFlyxThBsz3DK_TEg2CsG1uT_00E9Ez0HvU6pCX7sZg74nWcr5R3YYJW/exec',
         sheetId: '1EblrSWCeDCgOVLB3wJ9rkQ56-SdThchkcpaa3bR4Bas',
         heartbeatInterval: 60000, // 60 seconds
         autoSaveDelay: 3000 // 3 seconds after marking dirty
@@ -380,7 +380,7 @@
             
             const response = await fetch(CLOUD_CONFIG.webAppUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify(payload)
             });
             
