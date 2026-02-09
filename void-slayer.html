@@ -21,7 +21,7 @@
         #game-log { height: 160px; overflow-y: auto; border-top: 1px solid #222; padding-top: 10px; font-size: 0.85rem; color: #888; margin-top: 20px; }
         #auth-screen { position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 20px; overflow-y: auto; }
         input, select { background: #111; border: 1px solid #333; color: white; padding: 12px; margin-bottom: 12px; width: 260px; box-sizing: border-box; }
-        .hidden { display: none; }
+        .hidden { display: none !important; }
         .debug { font-size: 0.75rem; color: #555; margin-top: 10px; font-family: monospace; }
 
         /* Auth form styles */
@@ -40,6 +40,11 @@
         .realm-info { font-size: 0.75rem; color: #555; text-align: center; margin-top: -5px; margin-bottom: 10px; }
         .name-link { color: inherit; cursor: pointer; text-decoration: none; border-bottom: 1px dotted #555; transition: 0.15s; }
         .name-link:hover { color: var(--gold); border-bottom-color: var(--gold); }
+
+        /* Avatar selector */
+        .avatar-option { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; border: 2px solid #333; cursor: pointer; transition: 0.2s; background: #111; }
+        .avatar-option:hover { border-color: var(--gold); background: #1a1a1f; transform: scale(1.1); }
+        .avatar-option.selected { border-color: var(--accent); background: rgba(139, 0, 0, 0.2); box-shadow: 0 0 10px rgba(139, 0, 0, 0.5); }
 
         /* Mobile hamburger */
         #mobile-header { display: none; background: var(--panel); padding: 10px 15px; border-bottom: 1px solid #222; align-items: center; justify-content: space-between; z-index: 50; }
@@ -125,6 +130,10 @@
         <div class="realm-info">All players in the same realm share the same cloud database.</div>
 
         <div class="debug" id="connection-status">Initializing...</div>
+        <div class="debug" id="auth-debug" style="margin-top: 8px; max-height: 80px; overflow-y: auto;"></div>
+        <div style="margin-top: 10px;">
+            <span class="debug" style="cursor:pointer; color:#664444; border-bottom:1px dotted #664444;" onclick="if(confirm('Clear all local data for this realm? You will need to register again.')){const r=document.getElementById('realm-name').value.trim()||'void-realm-default';localStorage.removeItem('void-accounts-'+r);localStorage.removeItem('void-gamestate-'+r);document.getElementById('auth-debug').innerText='Local data cleared.';document.getElementById('auth-error').innerText='';}">Clear local data</span>
+        </div>
     </div>
 </div>
 
@@ -139,6 +148,7 @@
     <div class="nav-link" onclick="goTab('pvp'); refreshPvpTargets();">The Arena</div>
     <div class="nav-link" onclick="goTab('guild'); refreshGuildUI();">Guild Hall</div>
     <div class="nav-link" onclick="goTab('chat')">Tavern</div>
+    <div class="nav-link" onclick="goTab('profile')">Profile</div>
     <div class="nav-link" onclick="goTab('news'); refreshNews();">News</div>
     <div id="nav-backup" class="nav-link hidden" onclick="goTab('backup'); refreshBackupInfo();" style="color:var(--admin);">🔒 Backup</div>
     <div class="debug" style="margin-top: auto; padding-top: 20px;">
@@ -170,6 +180,7 @@
                 <h2>The Frontier</h2>
                 <p>The dark frontier sprawls before you, teeming with shadowy foes. Your blade thirsts for blood.</p>
                 <button class="action-btn" onclick="doGrind()">Slay Minions</button>
+                <button class="action-btn" onclick="doRest()" style="background:#1a3a1a; border-color:#2a5a2a;">🛌 Rest (Restore 50 HP)</button>
             </div>
             <div id="game-log"></div>
         </div>
@@ -230,10 +241,64 @@
             </div>
         </div>
 
+        <!-- PROFILE TAB -->
+        <div id="tab-profile" class="hidden">
+            <div class="card">
+                <h2>Profile Settings</h2>
+                <p style="color:#888;">Customize your character profile.</p>
+                
+                <div style="margin:20px 0;">
+                    <label style="display:block; color:#888; font-size:0.85rem; margin-bottom:5px;">Display Name</label>
+                    <input type="text" id="profile-displayname" placeholder="Your display name" style="width:300px; max-width:100%;">
+                    <p style="color:#666; font-size:0.8rem; margin-top:5px;">This is how other players will see you.</p>
+                </div>
+                
+                <div style="margin:20px 0;">
+                    <label style="display:block; color:#888; font-size:0.85rem; margin-bottom:8px;">Avatar</label>
+                    <div id="avatar-selector" style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <div class="avatar-option" data-avatar="⚔️" onclick="selectAvatar('⚔️')">⚔️</div>
+                        <div class="avatar-option" data-avatar="🗡️" onclick="selectAvatar('🗡️')">🗡️</div>
+                        <div class="avatar-option" data-avatar="🛡️" onclick="selectAvatar('🛡️')">🛡️</div>
+                        <div class="avatar-option" data-avatar="👤" onclick="selectAvatar('👤')">👤</div>
+                        <div class="avatar-option" data-avatar="🦇" onclick="selectAvatar('🦇')">🦇</div>
+                        <div class="avatar-option" data-avatar="💀" onclick="selectAvatar('💀')">💀</div>
+                        <div class="avatar-option" data-avatar="👻" onclick="selectAvatar('👻')">👻</div>
+                        <div class="avatar-option" data-avatar="🌙" onclick="selectAvatar('🌙')">🌙</div>
+                        <div class="avatar-option" data-avatar="⭐" onclick="selectAvatar('⭐')">⭐</div>
+                        <div class="avatar-option" data-avatar="🔥" onclick="selectAvatar('🔥')">🔥</div>
+                        <div class="avatar-option" data-avatar="❄️" onclick="selectAvatar('❄️')">❄️</div>
+                        <div class="avatar-option" data-avatar="⚡" onclick="selectAvatar('⚡')">⚡</div>
+                        <div class="avatar-option" data-avatar="🐉" onclick="selectAvatar('🐉')">🐉</div>
+                        <div class="avatar-option" data-avatar="🦅" onclick="selectAvatar('🦅')">🦅</div>
+                        <div class="avatar-option" data-avatar="🐺" onclick="selectAvatar('🐺')">🐺</div>
+                        <div class="avatar-option" data-avatar="🦁" onclick="selectAvatar('🦁')">🦁</div>
+                    </div>
+                    <input type="hidden" id="profile-avatar" value="⚔️">
+                </div>
+                
+                <div style="margin:20px 0;">
+                    <label style="display:block; color:#888; font-size:0.85rem; margin-bottom:5px;">Bio</label>
+                    <textarea id="profile-bio" placeholder="Tell others about yourself..." style="width:100%; max-width:500px; height:80px; background:#111; border:1px solid #333; color:white; padding:10px; font-family:inherit; resize:vertical;"></textarea>
+                    <p style="color:#666; font-size:0.8rem; margin-top:5px;">Maximum 200 characters.</p>
+                </div>
+                
+                <button class="action-btn" onclick="saveProfile()">Save Changes</button>
+                
+                <div id="profile-status" style="margin-top:15px; font-size:0.9rem; color:#888;"></div>
+            </div>
+        </div>
+
         <!-- NEWS TAB -->
         <div id="tab-news" class="hidden">
             <div class="card">
                 <h2>Realm News</h2>
+                
+                <div id="admin-news-post" class="hidden" style="margin-bottom:20px; padding:15px; background:#0a0a0a; border:1px solid #444;">
+                    <h3 style="color:var(--admin); margin-top:0;">✍ Post News (Admin)</h3>
+                    <textarea id="news-input" placeholder="Type your news announcement..." style="width:100%; height:80px; background:#111; border:1px solid #333; color:white; padding:10px; font-family:inherit; resize:vertical;"></textarea>
+                    <button class="action-btn" onclick="postNews()" style="margin-top:10px; background:var(--admin); border-color:var(--admin);">📢 Post News</button>
+                </div>
+                
                 <div id="news-list"></div>
             </div>
         </div>
@@ -263,7 +328,7 @@
     // CLOUD SYNC CONFIGURATION
     // ============================================
     const CLOUD_CONFIG = {
-        webAppUrl: 'https://script.google.com/macros/s/AKfycbzFnXNFnLlFWPvbwMSfKK3Ag0ikBYDn4vs9ZjGdSNTFffMiJAXFxZ4rzu9VnzKjquq7/exec',
+        webAppUrl: 'https://script.google.com/macros/s/AKfycbyJEZzZiIf3QyawNA-mR_lUHknsWok_2-FLp68odIYxKSiDMGT_F0JcZwJqnGDEMYI/exec',
         sheetId: '1EblrSWCeDCgOVLB3wJ9rkQ56-SdThchkcpaa3bR4Bas',
         heartbeatInterval: 60000, // 60 seconds
         autoSaveDelay: 3000 // 3 seconds after marking dirty
@@ -277,7 +342,7 @@
     // ============================================
     // GAME STATE & CONSTANTS
     // ============================================
-    const ADMIN = 'voidmaster';
+    const ADMIN = 'boyo1991';
     let currentUser = null;
     let currentTab = 'grind';
     let p = {}; // Current player
@@ -368,20 +433,48 @@
     // CLOUD SYNC (Enhancement — fails gracefully)
     // ============================================
 
+    function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+        return Promise.race([
+            fetch(url, options),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Request timed out')), timeoutMs)
+            )
+        ]);
+    }
+
+    function authDebug(msg) {
+        const el = document.getElementById('auth-debug');
+        if (el) {
+            el.innerHTML += msg + '<br>';
+            el.scrollTop = el.scrollHeight;
+        }
+        console.log('[auth]', msg);
+    }
+
     async function loadFromCloud() {
         try {
             updateCloudStatus('Loading...', '#ffaa00');
+            authDebug('Attempting cloud load...');
             const realm = document.getElementById('realm-name').value.trim() || 'void-realm-default';
             
-            const response = await fetch(`${CLOUD_CONFIG.webAppUrl}?realm=${encodeURIComponent(realm)}&action=load`, {
-                redirect: 'follow'
-            });
+            const response = await fetchWithTimeout(
+                `${CLOUD_CONFIG.webAppUrl}?realm=${encodeURIComponent(realm)}&action=load`,
+                { redirect: 'follow' },
+                12000
+            );
+            
+            authDebug('Response status: ' + response.status);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             
             const text = await response.text();
+            authDebug('Response length: ' + text.length + ' chars');
+            if (!text || text.trim().charAt(0) !== '{') {
+                authDebug('Bad response: ' + text.substring(0, 100));
+                throw new Error('Invalid response from server');
+            }
             const data = JSON.parse(text);
             
             if (data.success && data.data) {
@@ -406,15 +499,18 @@
                 saveLocalGameState();
                 cloudAvailable = true;
                 updateCloudStatus('Connected', '#44ff44');
+                authDebug('<span style="color:#44ff44">Cloud loaded OK</span>');
                 addLog("<span style='color:#44ff44'>✓ Loaded from cloud</span>");
                 return true;
             } else {
                 cloudAvailable = true;
+                authDebug('Cloud connected but empty (no data yet)');
                 updateCloudStatus('Connected (empty)', '#ffaa00');
                 return true;
             }
         } catch (err) {
             console.warn('Cloud sync unavailable:', err.message);
+            authDebug('<span style="color:#ff8844">Cloud error: ' + err.message + '</span>');
             cloudAvailable = false;
             updateCloudStatus('Local mode', '#ffaa00');
             
@@ -462,12 +558,12 @@
                 timestamp: Date.now()
             };
             
-            const response = await fetch(CLOUD_CONFIG.webAppUrl, {
+            const response = await fetchWithTimeout(CLOUD_CONFIG.webAppUrl, {
                 method: 'POST',
                 redirect: 'follow',
                 headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify(payload)
-            });
+            }, 12000);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
@@ -557,6 +653,7 @@
         const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value;
         const errorDiv = document.getElementById('auth-error');
+        const loginBtn = document.querySelector('#auth-login .action-btn');
         
         errorDiv.innerText = '';
         
@@ -565,59 +662,83 @@
             return;
         }
         
-        // Load from cloud first
-        await loadFromCloud();
+        // Show loading state
+        const origText = loginBtn.textContent;
+        loginBtn.textContent = 'Connecting...';
+        loginBtn.disabled = true;
+
+        try {
+            // Load from cloud first
+            await loadFromCloud();
         
-        const accounts = getAccounts();
+            const accounts = getAccounts();
+            const accountNames = Object.keys(accounts);
+            authDebug('Local accounts found: ' + (accountNames.length ? accountNames.join(', ') : 'none'));
         
-        if (!accounts[username]) {
-            errorDiv.innerText = 'Account not found.';
-            return;
+            if (!accounts[username]) {
+                errorDiv.innerText = 'Account not found. Register first or clear local data and re-register.';
+                authDebug('<span style="color:#ff4444">Account "' + username + '" not found</span>');
+                return;
+            }
+        
+            if (accounts[username].password !== password) {
+                errorDiv.innerText = 'Incorrect password.';
+                authDebug('<span style="color:#ff4444">Wrong password for "' + username + '"</span>');
+                return;
+            }
+        
+            authDebug('Password OK, logging in as ' + username);
+            currentUser = username;
+        
+            if (!gameState.players[username]) {
+                authDebug('Creating new player data...');
+                gameState.players[username] = {
+                    race: accounts[username].race,
+                    level: 1,
+                    xp: 0,
+                    hp: 100,
+                    maxHp: 100,
+                    str: accounts[username].race === 'Hollow' ? 11 : 10,
+                    wis: accounts[username].race === 'Wraith' ? 11 : 10,
+                    gold: 0,
+                    guild: null,
+                    kills: 0,
+                    deaths: 0,
+                    online: true,
+                    lastSeen: Date.now()
+                };
+                markDirty();
+            } else {
+                authDebug('Existing player found, updating online status...');
+                gameState.players[username].online = true;
+                gameState.players[username].lastSeen = Date.now();
+                markDirty();
+            }
+        
+            p = gameState.players[username];
+            authDebug('Player loaded: Lv' + p.level + ', ' + p.gold + 'g');
+        
+            document.getElementById('auth-screen').classList.add('hidden');
+            authDebug('Auth screen hidden, refreshing UI...');
+            refreshUI();
+            startCloudSync();
+            updatePlayerCount();
+        
+            if (username === ADMIN) {
+                document.getElementById('nav-backup').classList.remove('hidden');
+            }
+        
+            addLog(`<span style="color:var(--gold)">Welcome, ${username}.</span>`);
+            sendSystemChat(`⚔ ${username} has entered the Void.`);
+            authDebug('Login complete!');
+        } catch (err) {
+            console.warn('Login error:', err);
+            authDebug('<span style="color:#ff4444">LOGIN ERROR: ' + err.message + '</span>');
+            errorDiv.innerText = 'Login error: ' + err.message;
+        } finally {
+            loginBtn.textContent = origText;
+            loginBtn.disabled = false;
         }
-        
-        if (accounts[username].password !== password) {
-            errorDiv.innerText = 'Incorrect password.';
-            return;
-        }
-        
-        currentUser = username;
-        
-        if (!gameState.players[username]) {
-            gameState.players[username] = {
-                race: accounts[username].race,
-                level: 1,
-                xp: 0,
-                hp: 100,
-                maxHp: 100,
-                str: accounts[username].race === 'Hollow' ? 11 : 10,
-                wis: accounts[username].race === 'Wraith' ? 11 : 10,
-                gold: 0,
-                guild: null,
-                kills: 0,
-                deaths: 0,
-                online: true,
-                lastSeen: Date.now()
-            };
-            markDirty();
-        } else {
-            gameState.players[username].online = true;
-            gameState.players[username].lastSeen = Date.now();
-            markDirty();
-        }
-        
-        p = gameState.players[username];
-        
-        document.getElementById('auth-screen').classList.add('hidden');
-        refreshUI();
-        startCloudSync();
-        updatePlayerCount();
-        
-        if (username === ADMIN) {
-            document.getElementById('nav-backup').classList.remove('hidden');
-        }
-        
-        addLog(`<span style="color:var(--gold)">Welcome, ${username}.</span>`);
-        sendSystemChat(`⚔ ${username} has entered the Void.`);
     }
 
     async function doRegister() {
@@ -627,6 +748,7 @@
         const race = document.getElementById('race-sel').value;
         const errorDiv = document.getElementById('auth-error');
         const successDiv = document.getElementById('auth-success');
+        const regBtn = document.querySelector('#auth-register .action-btn');
         
         errorDiv.innerText = '';
         successDiv.innerText = '';
@@ -650,28 +772,40 @@
             errorDiv.innerText = 'Passwords do not match.';
             return;
         }
+
+        const origText = regBtn.textContent;
+        regBtn.textContent = 'Creating...';
+        regBtn.disabled = true;
         
-        // Load from cloud first
-        await loadFromCloud();
-        
-        const accounts = getAccounts();
-        
-        if (accounts[username]) {
-            errorDiv.innerText = 'Username already taken.';
-            return;
+        try {
+            // Load from cloud first
+            await loadFromCloud();
+            
+            const accounts = getAccounts();
+            
+            if (accounts[username]) {
+                errorDiv.innerText = 'Username already taken.';
+                return;
+            }
+            
+            accounts[username] = { password, race };
+            saveAccounts(accounts);
+            markDirty();
+            
+            successDiv.innerText = '✓ Account created! You may now login.';
+            
+            setTimeout(() => {
+                switchAuthTab('login');
+                document.getElementById('login-username').value = username;
+                document.getElementById('login-password').focus();
+            }, 1500);
+        } catch (err) {
+            console.warn('Register error:', err);
+            errorDiv.innerText = 'Registration error: ' + err.message;
+        } finally {
+            regBtn.textContent = origText;
+            regBtn.disabled = false;
         }
-        
-        accounts[username] = { password, race };
-        saveAccounts(accounts);
-        markDirty();
-        
-        successDiv.innerText = '✓ Account created! You may now login.';
-        
-        setTimeout(() => {
-            switchAuthTab('login');
-            document.getElementById('login-username').value = username;
-            document.getElementById('login-password').focus();
-        }, 1500);
     }
 
     // ============================================
@@ -709,6 +843,36 @@
         document.querySelectorAll('.content > div').forEach(el => el.classList.add('hidden'));
         const target = document.getElementById('tab-' + tabName);
         if (target) target.classList.remove('hidden');
+        
+        // Load profile data when opening profile tab
+        if (tabName === 'profile' && p) {
+            const displayNameInput = document.getElementById('profile-displayname');
+            const avatarInput = document.getElementById('profile-avatar');
+            const bioInput = document.getElementById('profile-bio');
+            
+            if (displayNameInput) {
+                displayNameInput.value = p.displayName || '';
+            }
+            
+            if (avatarInput) {
+                const currentAvatar = p.avatar || '⚔️';
+                avatarInput.value = currentAvatar;
+                
+                // Update visual selection
+                document.querySelectorAll('.avatar-option').forEach(opt => {
+                    opt.classList.remove('selected');
+                });
+                const selectedOpt = document.querySelector(`.avatar-option[data-avatar="${currentAvatar}"]`);
+                if (selectedOpt) {
+                    selectedOpt.classList.add('selected');
+                }
+            }
+            
+            if (bioInput) {
+                bioInput.value = p.bio || '';
+            }
+        }
+        
         closeMenu();
     }
 
@@ -757,6 +921,21 @@
         
         refreshUI();
         markDirty();
+    }
+
+    function doRest() {
+        const healAmount = 50;
+        const oldHp = p.hp;
+        p.hp = Math.min(p.maxHp, p.hp + healAmount);
+        const actualHeal = p.hp - oldHp;
+        
+        if (actualHeal === 0) {
+            addLog(`<span style="color:#888;">You are already at full health.</span>`);
+        } else {
+            addLog(`<span style="color:#44ff44;">You rest and recover. +${actualHeal} HP</span>`);
+            refreshUI();
+            markDirty();
+        }
     }
 
     // ============================================
@@ -853,10 +1032,12 @@
             const guildTag = data.guild && gameState.guilds[data.guild] ? `【${gameState.guilds[data.guild].tag}】` : '-';
             const isOnline = data.online && (Date.now() - (data.lastSeen || 0)) < 120000;
             const onlineIndicator = isOnline ? '<span style="color:#44ff44;">●</span>' : '<span style="color:#666;">●</span>';
+            const displayName = data.displayName || name;
+            const avatar = data.avatar || '⚔️';
             
             html += `<tr style="border-bottom:1px solid #222;">`;
             html += `<td style="padding:8px;">#${i + 1}</td>`;
-            html += `<td>${onlineIndicator} <span class="name-link" onclick="showPlayerCard('${name}')">${name}</span></td>`;
+            html += `<td>${onlineIndicator} ${avatar} <span class="name-link" onclick="showPlayerCard('${name}')">${displayName}</span></td>`;
             html += `<td style="text-align:center;">${data.level}</td>`;
             html += `<td style="text-align:center; color:#4af;">${guildTag}</td>`;
             html += `<td style="text-align:center;">${data.kills || 0}</td>`;
@@ -872,9 +1053,15 @@
         if (!pl) return;
         
         const guildName = pl.guild && gameState.guilds[pl.guild] ? gameState.guilds[pl.guild].name : 'None';
+        const displayName = pl.displayName || username;
+        const avatar = pl.avatar || '⚔️';
+        const bio = pl.bio || 'No bio set.';
         
         alert(
-            `═══ ${username} ═══\n\n` +
+            `${avatar} ${displayName} ${avatar}\n\n` +
+            `"${bio}"\n\n` +
+            `───────────────\n` +
+            `Account: ${username}\n` +
             `Race: ${pl.race}\n` +
             `Level: ${pl.level}\n` +
             `HP: ${pl.hp}/${pl.maxHp}\n` +
@@ -893,9 +1080,13 @@
         if (!container) return;
         
         const items = [
-            { name: 'Health Potion', cost: 50, desc: 'Restore 50 HP', effect: () => { p.hp = Math.min(p.maxHp, p.hp + 50); } },
             { name: 'Strength Elixir', cost: 200, desc: '+2 STR permanently', effect: () => { p.str += 2; } },
-            { name: 'Wisdom Scroll', cost: 200, desc: '+2 WIS permanently', effect: () => { p.wis += 2; } }
+            { name: 'Wisdom Scroll', cost: 200, desc: '+2 WIS permanently', effect: () => { p.wis += 2; } },
+            { name: 'Vitality Potion', cost: 300, desc: '+20 Max HP permanently', effect: () => { p.maxHp += 20; p.hp += 20; } },
+            { name: 'Warrior\'s Blessing', cost: 500, desc: '+5 STR permanently', effect: () => { p.str += 5; } },
+            { name: 'Sage\'s Blessing', cost: 500, desc: '+5 WIS permanently', effect: () => { p.wis += 5; } },
+            { name: 'Titan\'s Heart', cost: 800, desc: '+50 Max HP permanently', effect: () => { p.maxHp += 50; p.hp += 50; } },
+            { name: 'Divine Elixir', cost: 1000, desc: '+10 STR, +10 WIS permanently', effect: () => { p.str += 10; p.wis += 10; } }
         ];
         
         let html = '<div style="display:flex; flex-wrap:wrap; gap:10px;">';
@@ -949,9 +1140,11 @@
         targets.slice(0, 10).forEach(([name, data]) => {
             const isOnline = data.online && (Date.now() - (data.lastSeen || 0)) < 120000;
             const onlineText = isOnline ? '<span style="color:#44ff44;">●</span>' : '<span style="color:#666;">○</span>';
+            const displayName = data.displayName || name;
+            const avatar = data.avatar || '⚔️';
             
             html += `<div style="border:1px solid #333; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">`;
-            html += `<span>${onlineText} <span class="name-link" onclick="showPlayerCard('${name}')">${name}</span> (Lv ${data.level})</span>`;
+            html += `<span>${onlineText} ${avatar} <span class="name-link" onclick="showPlayerCard('${name}')">${displayName}</span> (Lv ${data.level})</span>`;
             html += `<button class="action-btn" onclick="attackPlayer('${name}')">⚔ Attack</button>`;
             html += `</div>`;
         });
@@ -962,6 +1155,9 @@
     function attackPlayer(targetName) {
         const target = gameState.players[targetName];
         if (!target) return;
+        
+        const targetDisplay = target.displayName || targetName;
+        const myDisplay = p.displayName || currentUser;
         
         const myPower = p.level * 10 + p.str * 5;
         const theirPower = target.level * 10 + target.str * 5;
@@ -977,15 +1173,15 @@
             target.gold = Math.max(0, target.gold - goldStolen);
             target.deaths++;
             
-            addLog(`<span style="color:#44ff44;">Victory!</span> You defeated ${targetName}. <span style="color:var(--gold)">+${goldStolen} Gold, +${xpGain} XP</span>`);
-            sendSystemChat(`⚔ ${currentUser} has defeated ${targetName} in the Arena!`);
+            addLog(`<span style="color:#44ff44;">Victory!</span> You defeated ${targetDisplay}. <span style="color:var(--gold)">+${goldStolen} Gold, +${xpGain} XP</span>`);
+            sendSystemChat(`⚔ ${myDisplay} has defeated ${targetDisplay} in the Arena!`);
         } else {
             const goldLost = Math.floor(p.gold * 0.05);
             p.gold = Math.max(0, p.gold - goldLost);
             p.deaths++;
             target.kills++;
             
-            addLog(`<span style="color:#ff4444;">Defeat!</span> ${targetName} bested you. <span style="color:#ff4444;">-${goldLost} Gold</span>`);
+            addLog(`<span style="color:#ff4444;">Defeat!</span> ${targetDisplay} bested you. <span style="color:#ff4444;">-${goldLost} Gold</span>`);
         }
         
         refreshUI();
@@ -1235,7 +1431,9 @@
                 div.innerHTML = `<strong>[SYSTEM]</strong> ${msg.text}`;
             } else {
                 const userColor = msg.user === currentUser ? 'var(--gold)' : '#4af';
-                div.innerHTML = `<strong style="color:${userColor};">${msg.user}:</strong> ${msg.text}`;
+                const playerData = gameState.players[msg.user];
+                const displayName = playerData?.displayName || msg.user;
+                div.innerHTML = `<strong style="color:${userColor};">${displayName}:</strong> ${msg.text}`;
             }
             
             log.appendChild(div);
@@ -1250,6 +1448,16 @@
     function refreshNews() {
         const container = document.getElementById('news-list');
         if (!container) return;
+        
+        // Show/hide admin post UI
+        const adminUI = document.getElementById('admin-news-post');
+        if (adminUI) {
+            if (currentUser === ADMIN) {
+                adminUI.classList.remove('hidden');
+            } else {
+                adminUI.classList.add('hidden');
+            }
+        }
         
         if (gameState.news.length === 0) {
             container.innerHTML = '<p style="color:#666;">No news yet.</p>';
@@ -1279,6 +1487,95 @@
         }
         
         markDirty();
+    }
+
+    function postNews() {
+        if (currentUser !== ADMIN) {
+            alert('Only the Void Master can post news.');
+            return;
+        }
+        
+        const input = document.getElementById('news-input');
+        const text = input.value.trim();
+        
+        if (!text) {
+            alert('Please enter a news message.');
+            return;
+        }
+        
+        addNews(text);
+        sendSystemChat(`📰 ${text}`);
+        input.value = '';
+        refreshNews();
+        
+        addLog("<span style='color:var(--admin)'>News posted to realm.</span>");
+    }
+
+    // ============================================
+    // PROFILE SYSTEM
+    // ============================================
+    function saveProfile() {
+        const displayName = document.getElementById('profile-displayname').value.trim();
+        const avatar = document.getElementById('profile-avatar').value;
+        const bio = document.getElementById('profile-bio').value.trim();
+        const status = document.getElementById('profile-status');
+        
+        if (displayName && displayName.length < 2) {
+            status.style.color = '#ff4444';
+            status.innerText = 'Display name must be at least 2 characters.';
+            return;
+        }
+        
+        if (displayName && displayName.length > 20) {
+            status.style.color = '#ff4444';
+            status.innerText = 'Display name must be 20 characters or less.';
+            return;
+        }
+        
+        if (bio && bio.length > 200) {
+            status.style.color = '#ff4444';
+            status.innerText = 'Bio must be 200 characters or less.';
+            return;
+        }
+        
+        // Save display name
+        if (displayName) {
+            p.displayName = displayName;
+        } else {
+            delete p.displayName;
+        }
+        
+        // Save avatar
+        p.avatar = avatar || '⚔️';
+        
+        // Save bio
+        if (bio) {
+            p.bio = bio;
+        } else {
+            delete p.bio;
+        }
+        
+        markDirty();
+        
+        status.style.color = '#44ff44';
+        status.innerText = '✓ Profile saved!';
+        
+        setTimeout(() => {
+            status.innerText = '';
+        }, 3000);
+        
+        refreshUI();
+        addLog('<span style="color:var(--gold)">Profile updated.</span>');
+    }
+
+    function selectAvatar(emoji) {
+        document.getElementById('profile-avatar').value = emoji;
+        
+        // Update visual selection
+        document.querySelectorAll('.avatar-option').forEach(opt => {
+            opt.classList.remove('selected');
+        });
+        document.querySelector(`.avatar-option[data-avatar="${emoji}"]`).classList.add('selected');
     }
 
     // ============================================
