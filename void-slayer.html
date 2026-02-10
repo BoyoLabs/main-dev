@@ -109,6 +109,8 @@
         .trophy-item { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; margin: 4px; border: 1px solid; background: rgba(20,20,25,0.9); font-size: 0.85rem; }
         .trophy-grid { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
 
+        .trophy-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9998; background: rgba(10,10,15,0.98); border: 2px solid #444; padding: 25px 35px; text-align: center; min-width: 250px; max-width: 90vw; animation: toastIn 0.2s ease; box-shadow: 0 0 40px rgba(0,0,0,0.8); }
+
     </style>
 </head>
 <body>
@@ -281,7 +283,11 @@
         <div id="tab-bosses" class="hidden">
             <div class="card">
                 <h2>🔥 Boss Arena</h2>
-                <p style="color:#888;">Ancient terrors await. New bosses unlock every 10 levels. Defeat them for legendary trophies and massive rewards. <span style="color:#ff4444; font-weight:bold;">There is no rest here.</span></p>
+                <p style="color:#888;">Ancient terrors await. New bosses unlock every 10 levels. Defeat them for legendary trophies and massive rewards.</p>
+                <div id="boss-rest-area" style="margin-bottom:15px;">
+                    <button class="action-btn" onclick="doBossRest()" style="background:#1a3a1a; border-color:#2a5a2a;">🛌 Rest (Restore 50% HP)</button>
+                    <span id="boss-hp-display" style="color:#888; font-size:0.85rem; margin-left:10px;"></span>
+                </div>
                 <div id="boss-list"></div>
                 <div id="boss-fight-area" class="hidden" style="margin-top:20px;"></div>
             </div>
@@ -965,6 +971,11 @@
     }
 
     function goTab(tabName) {
+        // If leaving bosses tab while in a fight, reset the boss
+        if (currentTab === 'bosses' && tabName !== 'bosses' && activeBossFight) {
+            resetActiveBoss();
+        }
+
         currentTab = tabName;
         document.querySelectorAll('.content > div').forEach(el => el.classList.add('hidden'));
         const target = document.getElementById('tab-' + tabName);
@@ -1011,12 +1022,7 @@
             const trophyContainer = document.getElementById('profile-trophies');
             if (trophyContainer) {
                 if (p.trophies && p.trophies.length > 0) {
-                    let tHtml = renderTrophies(p.trophies);
-                    // Also add stat summary
-                    let totalStr = 0, totalWis = 0, totalHp = 0;
-                    p.trophies.forEach(t => { totalStr += t.str; totalWis += t.wis; totalHp += t.hp; });
-                    tHtml += `<div style="margin-top:10px; color:#888; font-size:0.85rem;">Total trophy bonuses: <span style="color:var(--gold);">+${totalStr} STR, +${totalWis} WIS, +${totalHp} HP</span> from ${p.trophies.length} trophies</div>`;
-                    trophyContainer.innerHTML = tHtml;
+                    trophyContainer.innerHTML = renderTrophies(p.trophies);
                 } else {
                     trophyContainer.innerHTML = '<p style="color:#666;">No trophies yet. Defeat bosses to earn them!</p>';
                 }
@@ -2725,18 +2731,27 @@
     function refreshBossUI() {
         const list = document.getElementById('boss-list');
         const fightArea = document.getElementById('boss-fight-area');
+        const restArea = document.getElementById('boss-rest-area');
+        const hpDisplay = document.getElementById('boss-hp-display');
         if (!list) return;
 
-        // If in active fight, show fight UI
+        // Update HP display
+        if (hpDisplay && p) {
+            hpDisplay.textContent = `HP: ${p.hp} / ${p.maxHp}`;
+        }
+
+        // If in active fight, show fight UI, hide rest
         if (activeBossFight) {
             list.classList.add('hidden');
             fightArea.classList.remove('hidden');
+            if (restArea) restArea.classList.add('hidden');
             renderBossFight();
             return;
         }
 
         list.classList.remove('hidden');
         fightArea.classList.add('hidden');
+        if (restArea) restArea.classList.remove('hidden');
 
         const bossData = getPlayerBossData();
         let html = '';
@@ -2747,21 +2762,8 @@
             const defeated = bd.defeated || false;
             const maxHp = getBossMaxHp(boss);
 
-            // Calculate current HP with regen
-            let currentHp = maxHp; // default full
-            if (bd.currentHp !== undefined && bd.currentHp < maxHp && !defeated) {
-                currentHp = bd.currentHp;
-                // Apply regen since last fight
-                if (bd.lastFightTime) {
-                    const minutesAway = (Date.now() - bd.lastFightTime) / 60000;
-                    currentHp = Math.min(maxHp, currentHp + Math.floor(minutesAway * boss.regenPerMin));
-                }
-            } else if (defeated) {
-                currentHp = 0;
-            }
-
-            const hpPercent = Math.max(0, (currentHp / maxHp) * 100);
-            const hpColor = defeated ? '#44ff44' : hpPercent > 50 ? '#ff4444' : hpPercent > 25 ? '#ff8800' : '#ffcc00';
+            const hpPercent = defeated ? 0 : 100;
+            const hpColor = defeated ? '#44ff44' : '#ff4444';
 
             html += `<div class="boss-card${unlocked ? '' : ' locked'}">`;
             html += `<div class="boss-tier" style="background:${defeated ? 'rgba(0,100,0,0.5); color:#44ff44;' : 'rgba(139,0,0,0.5); color:#ff6666;'}">${defeated ? '✓ DEFEATED' : unlocked ? 'AVAILABLE' : `🔒 LV ${boss.unlockLevel}`}</div>`;
@@ -2770,7 +2772,7 @@
 
             if (unlocked) {
                 html += `<div class="boss-hp-bar"><div class="boss-hp-fill" style="width:${hpPercent}%; background:linear-gradient(90deg, ${hpColor}, ${defeated ? '#44ff44' : '#ff0000'});"></div>`;
-                html += `<div class="boss-hp-text">${defeated ? 'DEFEATED' : `${currentHp.toLocaleString()} / ${maxHp.toLocaleString()}`}</div></div>`;
+                html += `<div class="boss-hp-text">${defeated ? 'DEFEATED' : `${maxHp.toLocaleString()} / ${maxHp.toLocaleString()}`}</div></div>`;
 
                 html += `<div style="margin:8px 0;">`;
                 if (boss.rewardType === 'xp' || boss.xpReward > 0) html += `<span class="boss-reward-tag xp">+${boss.xpReward.toLocaleString()} XP</span>`;
@@ -2807,27 +2809,15 @@
         if (!boss || p.level < boss.unlockLevel) return;
 
         if (p.hp <= 0) {
-            showToast('error', 'Too Weak', 'You must rest before challenging a boss', 'Go to The Frontier and rest');
+            showToast('error', 'Too Weak', 'You must rest before challenging a boss', 'Rest in the Boss Arena first');
             return;
         }
 
-        const bossData = getPlayerBossData();
-        const bd = bossData[bossId] || {};
         const maxHp = getBossMaxHp(boss);
-
-        let currentHp = maxHp;
-        if (bd.currentHp !== undefined && bd.currentHp > 0) {
-            currentHp = bd.currentHp;
-            // Apply regen
-            if (bd.lastFightTime) {
-                const minutesAway = (Date.now() - bd.lastFightTime) / 60000;
-                currentHp = Math.min(maxHp, currentHp + Math.floor(minutesAway * boss.regenPerMin));
-            }
-        }
 
         activeBossFight = {
             bossId: bossId,
-            bossCurrentHp: currentHp,
+            bossCurrentHp: maxHp,
             bossMaxHp: maxHp
         };
 
@@ -2839,7 +2829,7 @@
         if (!boss) return;
 
         if (p.hp <= 0) {
-            showToast('error', 'Too Weak', 'You must rest before challenging a boss', 'Go to The Frontier and rest');
+            showToast('error', 'Too Weak', 'You must rest before challenging a boss', 'Rest in the Boss Arena first');
             return;
         }
 
@@ -2888,11 +2878,11 @@
         html += `<div class="boss-hp-text">${p.hp} / ${p.maxHp}</div></div></div>`;
 
         // Boss info
-        html += `<div style="margin:12px 0; color:#888; font-size:0.85rem;">Boss hits you for ~${bossDmg} per attack · Your STR: ${p.str} · <span style="color:#ff4444;">No resting allowed</span></div>`;
+        html += `<div style="margin:12px 0; color:#888; font-size:0.85rem;">Boss hits you for ~${bossDmg} per attack · Your STR: ${p.str} · <span style="color:#ff4444;">No resting mid-fight · Fleeing resets the boss</span></div>`;
 
         if (p.hp <= 0) {
             html += `<div style="padding:15px; text-align:center; color:#ff4444; border:1px solid #ff4444; margin:10px 0;">`;
-            html += `<strong>You have fallen!</strong><br>Return to The Frontier to rest, then come back.`;
+            html += `<strong>You have fallen!</strong><br>Rest up in the Boss Arena, then try again.`;
             html += `</div>`;
             html += `<button class="action-btn" onclick="fleeBossFight()" style="width:100%;">Return to Boss List</button>`;
         } else {
@@ -3035,17 +3025,56 @@
     function fleeBossFight() {
         if (!activeBossFight) return;
 
-        // Save current boss HP state
+        // Reset boss HP on flee
         const boss = BOSS_DEFINITIONS.find(b => b.id === activeBossFight.bossId);
         if (boss) {
             const bossData = getPlayerBossData();
-            if (!bossData[boss.id]) bossData[boss.id] = {};
-            bossData[boss.id].currentHp = activeBossFight.bossCurrentHp;
-            bossData[boss.id].lastFightTime = Date.now();
+            const maxHp = getBossMaxHp(boss);
+            if (bossData[boss.id]) {
+                bossData[boss.id].currentHp = maxHp;
+                bossData[boss.id].lastFightTime = null;
+            }
+            gameAction(() => { markDirty(); });
+            addLog(`<span style="color:#888;">You fled from ${boss.name}. The boss recovers fully.</span>`);
+        }
+
+        activeBossFight = null;
+        refreshBossUI();
+    }
+
+    function resetActiveBoss() {
+        if (!activeBossFight) return;
+
+        const boss = BOSS_DEFINITIONS.find(b => b.id === activeBossFight.bossId);
+        if (boss) {
+            const bossData = getPlayerBossData();
+            const maxHp = getBossMaxHp(boss);
+            if (bossData[boss.id]) {
+                bossData[boss.id].currentHp = maxHp;
+                bossData[boss.id].lastFightTime = null;
+            }
             gameAction(() => { markDirty(); });
         }
 
         activeBossFight = null;
+    }
+
+    function doBossRest() {
+        if (activeBossFight) return; // Can't rest during a fight
+        gameAction(() => {
+            const healAmount = Math.floor(p.maxHp * 0.5);
+            const oldHp = p.hp;
+            p.hp = Math.min(p.maxHp, p.hp + healAmount);
+            const actualHeal = p.hp - oldHp;
+
+            if (actualHeal === 0) {
+                addLog(`<span style="color:#888;">You are already at full health.</span>`);
+            } else {
+                addLog(`<span style="color:#44ff44;">You rest in the Boss Arena. +${actualHeal} HP (${p.hp}/${p.maxHp})</span>`);
+                markDirty();
+            }
+            refreshUI();
+        });
         refreshBossUI();
     }
 
@@ -3053,20 +3082,65 @@
     function renderTrophies(trophies) {
         if (!trophies || trophies.length === 0) return '';
 
+        // Stack duplicates by name
+        const stacked = {};
+        trophies.forEach(t => {
+            const key = t.name;
+            if (!stacked[key]) {
+                stacked[key] = { ...t, count: 1 };
+            } else {
+                stacked[key].count++;
+            }
+        });
+
+        const rarityOrder = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
+        const sorted = Object.values(stacked).sort((a, b) => (rarityOrder[a.rarity] || 5) - (rarityOrder[b.rarity] || 5));
+
         let html = '<div style="margin-top:15px;"><h4 style="color:var(--gold); margin-bottom:8px;">🏆 Boss Trophies</h4>';
         html += '<div class="trophy-grid">';
 
-        const rarityOrder = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
-        const sorted = [...trophies].sort((a, b) => (rarityOrder[a.rarity] || 5) - (rarityOrder[b.rarity] || 5));
-
         sorted.forEach(t => {
-            html += `<div class="trophy-item rarity-${t.rarity}" title="+${t.str} STR, +${t.wis} WIS, +${t.hp} HP · From: ${t.fromBoss}">`;
-            html += `${t.emoji} ${t.name} <span style="font-size:0.7rem; opacity:0.7;">[${t.rarity}]</span>`;
+            const countBadge = t.count > 1 ? ` <span style="font-size:0.75rem; color:#fff; background:rgba(255,255,255,0.15); padding:1px 5px; border-radius:3px;">x${t.count}</span>` : '';
+            html += `<div class="trophy-item rarity-${t.rarity}" style="cursor:pointer;" onclick="showTrophyDetail('${t.name.replace(/'/g, "\\'")}', '${t.emoji}', '${t.rarity}', ${t.str}, ${t.wis}, ${t.hp}, ${t.count})">`;
+            html += `${t.emoji} ${t.name}${countBadge}`;
             html += `</div>`;
         });
 
         html += '</div></div>';
         return html;
+    }
+
+    function showTrophyDetail(name, emoji, rarity, str, wis, hp, count) {
+        const rarityColors = { common:'#aaa', uncommon:'#44ff44', rare:'#4488ff', epic:'#aa44ff', legendary:'#ff8800' };
+        const color = rarityColors[rarity] || '#aaa';
+
+        // Remove existing popups
+        document.querySelectorAll('.trophy-popup').forEach(el => el.remove());
+
+        const popup = document.createElement('div');
+        popup.className = 'trophy-popup';
+        popup.innerHTML = `
+            <div style="font-size:2rem; margin-bottom:8px;">${emoji}</div>
+            <div style="color:${color}; font-weight:bold; font-size:1.1rem; text-transform:uppercase; letter-spacing:1px;">${name}</div>
+            <div style="color:${color}; font-size:0.8rem; margin:4px 0 12px 0;">[${rarity.toUpperCase()}]${count > 1 ? ` × ${count}` : ''}</div>
+            <div style="color:#ccc; font-size:0.9rem; line-height:1.8;">
+                <div>+${str} STR <span style="color:#666;">per trophy</span></div>
+                <div>+${wis} WIS <span style="color:#666;">per trophy</span></div>
+                <div>+${hp} HP <span style="color:#666;">per trophy</span></div>
+            </div>
+            ${count > 1 ? `<div style="margin-top:10px; padding-top:10px; border-top:1px solid #333; color:var(--gold); font-size:0.85rem;">Total from ${count}×: +${str * count} STR, +${wis * count} WIS, +${hp * count} HP</div>` : ''}
+            <div style="margin-top:12px; font-size:0.75rem; color:#555;">Tap anywhere to close</div>
+        `;
+        document.body.appendChild(popup);
+
+        // Close on click anywhere
+        setTimeout(() => {
+            const closer = (e) => {
+                if (popup.parentNode) popup.remove();
+                document.removeEventListener('click', closer);
+            };
+            document.addEventListener('click', closer);
+        }, 50);
     }
     // ============================================
     // INITIALIZATION
