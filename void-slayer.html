@@ -179,15 +179,15 @@
 <nav id="main-nav">
     <h2 style="color:var(--accent)">VOID SLAYER</h2>
     <div class="nav-link" onclick="goTab('grind')">The Frontier</div>
-    <div class="nav-link" onclick="goTab('lead'); loadLeaderboard();">Leaderboard</div>
-    <div class="nav-link" onclick="goTab('shop'); refreshShop();">Black Market</div>
+    <div class="nav-link" onclick="goTab('bosses'); refreshBossUI();">Bosses</div>
     <div class="nav-link" onclick="goTab('pvp'); refreshPvpTargets();">The Arena</div>
     <div class="nav-link" onclick="goTab('guild'); refreshGuildUI();">Guild Hall</div>
     <div class="nav-link" onclick="goTab('wars'); refreshWarsUI();">Guild Wars</div>
-    <div class="nav-link" onclick="goTab('bosses'); refreshBossUI();">Bosses</div>
     <div class="nav-link" onclick="goTab('chat'); displayChat();">Tavern</div>
-    <div class="nav-link" onclick="goTab('profile')">Profile</div>
+    <div class="nav-link" onclick="goTab('shop'); refreshShop();">Black Market</div>
+    <div class="nav-link" onclick="goTab('lead'); loadLeaderboard();">Leaderboard</div>
     <div class="nav-link" onclick="goTab('news'); refreshNews();">News</div>
+    <div class="nav-link" onclick="goTab('profile')">Profile</div>
     <div id="nav-admin" class="nav-link hidden" onclick="goTab('admin'); refreshAdminConsole();" style="color:var(--admin);">🔒 Admin Console</div>
     <div class="debug" style="margin-top: auto; padding-top: 20px;">
         <span id="player-count">0</span> players online<br>
@@ -209,6 +209,7 @@
         <span>WIS <span class="stat-val" id="stat-wis">10</span></span>
         <span style="color:var(--gold)">⚜ <span class="stat-val" id="stat-gold">0</span></span>
         <span id="stat-guild"></span>
+        <span style="margin-left:auto; cursor:pointer; color:#888; border-bottom:1px dotted #555; transition:0.15s;" onclick="goTab('profile')" onmouseover="this.style.color='var(--gold)';this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.color='#888';this.style.borderBottomColor='#555'">⚙ Profile</span>
     </div>
 
     <div class="content">
