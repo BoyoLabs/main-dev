@@ -968,10 +968,8 @@
         const xpGain = Math.floor(10 + Math.random() * 20);
         const goldGain = Math.floor(5 + Math.random() * 15);
         
-        // Enemies deal damage: enough to need resting but not a struggle
-        // ~5-12% of maxHp per fight, so roughly 8-20 fights before needing rest
-        const dmgPercent = 0.05 + Math.random() * 0.07;
-        const damage = Math.max(1, Math.floor(p.maxHp * dmgPercent));
+        // Enemies deal flat damage — higher max HP = more fights before resting
+        const damage = 20;
         
         p.xp += xpGain;
         p.gold += goldGain;
@@ -1179,16 +1177,21 @@
             const onlineText = isOnline ? '<span style="color:#44ff44;">●</span>' : '<span style="color:#666;">○</span>';
             const displayName = data.displayName || name;
             const avatar = data.avatar || '⚔️';
+            const hasGold = (data.gold || 0) > 0;
             
             const myPower = p.level * 10 + p.str * 5;
             const theirPower = data.level * 10 + data.str * 5;
             const winChance = Math.round((myPower / (myPower + theirPower)) * 100);
             const chanceColor = winChance >= 60 ? '#44ff44' : winChance >= 40 ? '#ffaa00' : '#ff4444';
             
-            html += `<div style="border:1px solid #333; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">`;
+            html += `<div style="border:1px solid ${hasGold ? '#333' : '#222'}; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;${!hasGold ? ' opacity:0.5;' : ''}">`;
             html += `<span>${onlineText} ${avatar} <span class="name-link" onclick="showPlayerCard('${name}')">${displayName}</span> (Lv ${data.level}) · <span style="color:var(--gold);">⚜ ${(data.gold || 0).toLocaleString()}</span></span>`;
-            html += `<span style="display:flex; align-items:center; gap:10px;"><span style="color:${chanceColor}; font-size:0.8rem;">${winChance}% win</span>`;
-            html += `<button class="action-btn" onclick="attackPlayer('${name}')">⚔ Attack</button></span>`;
+            if (hasGold) {
+                html += `<span style="display:flex; align-items:center; gap:10px;"><span style="color:${chanceColor}; font-size:0.8rem;">${winChance}% win</span>`;
+                html += `<button class="action-btn" onclick="attackPlayer('${name}')">⚔ Attack</button></span>`;
+            } else {
+                html += `<span style="color:#666; font-size:0.8rem;">No gold to steal</span>`;
+            }
             html += `</div>`;
         });
         
@@ -1198,6 +1201,11 @@
     function attackPlayer(targetName) {
         const target = gameState.players[targetName];
         if (!target) return;
+        
+        if ((target.gold || 0) <= 0) {
+            showToast('error', 'No Loot', 'This player has no gold to steal', '');
+            return;
+        }
         
         const targetDisplay = target.displayName || targetName;
         const myDisplay = p.displayName || currentUser;
