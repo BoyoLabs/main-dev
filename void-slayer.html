@@ -41,6 +41,25 @@
         .name-link { color: inherit; cursor: pointer; text-decoration: none; border-bottom: 1px dotted #555; transition: 0.15s; }
         .name-link:hover { color: var(--gold); border-bottom-color: var(--gold); }
 
+        /* Result toast notifications */
+        .result-toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; padding: 25px 40px; border: 2px solid; text-align: center; font-size: 1.1rem; animation: toastIn 0.3s ease, toastOut 0.4s ease 2.6s; pointer-events: none; min-width: 300px; max-width: 90vw; }
+        .result-toast.victory { background: rgba(0, 40, 0, 0.95); border-color: #44ff44; color: #44ff44; }
+        .result-toast.defeat { background: rgba(50, 0, 0, 0.95); border-color: #ff4444; color: #ff4444; }
+        .result-toast.purchase { background: rgba(40, 30, 0, 0.95); border-color: var(--gold); color: var(--gold); }
+        .result-toast.error { background: rgba(50, 0, 0, 0.95); border-color: #ff4444; color: #ff4444; }
+        .result-toast .toast-title { font-size: 1.4rem; font-weight: bold; margin-bottom: 8px; letter-spacing: 2px; text-transform: uppercase; }
+        .result-toast .toast-detail { font-size: 0.9rem; color: #ccc; margin-top: 5px; }
+        @keyframes toastIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+        @keyframes toastOut { from { opacity: 1; } to { opacity: 0; } }
+
+        /* Player profile page */
+        .profile-page-header { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
+        .profile-page-avatar { font-size: 3rem; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; border: 2px solid #333; background: #0a0a0a; }
+        .profile-page-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 20px 0; }
+        .profile-stat-card { background: #0a0a0a; border: 1px solid #222; padding: 12px; text-align: center; }
+        .profile-stat-card .stat-label { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+        .profile-stat-card .stat-value { font-size: 1.3rem; color: var(--gold); font-weight: bold; margin-top: 4px; }
+
         /* Avatar selector */
         .avatar-option { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; border: 2px solid #333; cursor: pointer; transition: 0.2s; background: #111; }
         .avatar-option:hover { border-color: var(--gold); background: #1a1a1f; transform: scale(1.1); }
@@ -142,13 +161,12 @@
 <nav id="main-nav">
     <h2 style="color:var(--accent)">VOID MENU</h2>
     <div class="nav-link" onclick="goTab('grind')">The Frontier</div>
-    <div id="nav-dungeon" class="nav-link" onclick="goTab('dungeon')">The Void Gate</div>
     <div class="nav-link" onclick="goTab('lead'); loadLeaderboard();">Leaderboard</div>
     <div class="nav-link" onclick="goTab('shop'); refreshShop();">Black Market</div>
     <div class="nav-link" onclick="goTab('pvp'); refreshPvpTargets();">The Arena</div>
     <div class="nav-link" onclick="goTab('guild'); refreshGuildUI();">Guild Hall</div>
     <div class="nav-link" onclick="goTab('wars'); refreshWarsUI();">Guild Wars</div>
-    <div class="nav-link" onclick="goTab('chat')">Tavern</div>
+    <div class="nav-link" onclick="goTab('chat'); displayChat();">Tavern</div>
     <div class="nav-link" onclick="goTab('profile')">Profile</div>
     <div class="nav-link" onclick="goTab('news'); refreshNews();">News</div>
     <div id="nav-backup" class="nav-link hidden" onclick="goTab('backup'); refreshBackupInfo();" style="color:var(--admin);">🔒 Backup</div>
@@ -167,7 +185,7 @@
     <div id="stats-bar">
         <span>Lv <span class="stat-val" id="stat-level">1</span></span>
         <span>XP <span class="stat-val" id="stat-xp">0</span>/<span id="stat-xp-next">100</span></span>
-        <span>HP <span class="stat-val" id="stat-hp">100</span></span>
+        <span>HP <span class="stat-val" id="stat-hp">100</span>/<span id="stat-maxhp">100</span></span>
         <span>STR <span class="stat-val" id="stat-str">10</span></span>
         <span>WIS <span class="stat-val" id="stat-wis">10</span></span>
         <span style="color:var(--gold)">⚜ <span class="stat-val" id="stat-gold">0</span></span>
@@ -181,19 +199,9 @@
                 <h2>The Frontier</h2>
                 <p>The dark frontier sprawls before you, teeming with shadowy foes. Your blade thirsts for blood.</p>
                 <button class="action-btn" onclick="doGrind()">Slay Minions</button>
-                <button class="action-btn" onclick="doRest()" style="background:#1a3a1a; border-color:#2a5a2a;">🛌 Rest (Restore 50 HP)</button>
+                <button class="action-btn" onclick="doRest()" style="background:#1a3a1a; border-color:#2a5a2a;">🛌 Rest (Restore 50% HP)</button>
             </div>
             <div id="game-log"></div>
-        </div>
-
-        <!-- VOID GATE TAB -->
-        <div id="tab-dungeon" class="hidden">
-            <div class="card">
-                <h2>The Void Gate</h2>
-                <p id="gate-desc">The massive obsidian gate looms before you.</p>
-                <div id="gate-status"></div>
-                <div id="gate-actions"></div>
-            </div>
         </div>
 
         <!-- LEADERBOARD TAB -->
@@ -208,7 +216,7 @@
         <div id="tab-shop" class="hidden">
             <div class="card">
                 <h2>Black Market</h2>
-                <p>A hooded merchant whispers prices. Gold buys power.</p>
+                <p>A hooded merchant whispers prices. Gold buys power. <span style="color:var(--gold); font-weight:bold;">Your gold: <span id="shop-gold">0</span></span></p>
                 <div id="shop-items"></div>
             </div>
         </div>
@@ -217,7 +225,7 @@
         <div id="tab-pvp" class="hidden">
             <div class="card">
                 <h2>The Arena</h2>
-                <p>Challenge other slayers to mortal combat.</p>
+                <p>Challenge other slayers to mortal combat. <span style="color:#ff4444;">Winner takes ALL of the loser's gold.</span></p>
                 <div id="pvp-targets"></div>
             </div>
         </div>
@@ -304,6 +312,14 @@
                 <button class="action-btn" onclick="saveProfile()">Save Changes</button>
                 
                 <div id="profile-status" style="margin-top:15px; font-size:0.9rem; color:#888;"></div>
+            </div>
+        </div>
+
+        <!-- PLAYER VIEW TAB (when clicking a player name) -->
+        <div id="tab-playerview" class="hidden">
+            <div class="card">
+                <button class="action-btn" onclick="history.back(); goTab(window._lastTab || 'grind');" style="margin-bottom:15px; font-size:0.8rem;">← Back</button>
+                <div id="playerview-content"></div>
             </div>
         </div>
 
@@ -724,7 +740,8 @@
                     kills: 0,
                     deaths: 0,
                     online: true,
-                    lastSeen: Date.now()
+                    lastSeen: Date.now(),
+                    createdAt: Date.now()
                 };
                 markDirty();
             } else {
@@ -834,7 +851,21 @@
         document.getElementById('stat-level').innerText = p.level;
         document.getElementById('stat-xp').innerText = p.xp;
         document.getElementById('stat-xp-next').innerText = p.level * 100;
-        document.getElementById('stat-hp').innerText = p.hp;
+        
+        const hpEl = document.getElementById('stat-hp');
+        hpEl.innerText = p.hp;
+        document.getElementById('stat-maxhp').innerText = p.maxHp;
+        const hpPercent = p.hp / p.maxHp;
+        if (hpPercent <= 0) {
+            hpEl.style.color = '#ff0000';
+        } else if (hpPercent <= 0.25) {
+            hpEl.style.color = '#ff4444';
+        } else if (hpPercent <= 0.5) {
+            hpEl.style.color = '#ffaa00';
+        } else {
+            hpEl.style.color = '';
+        }
+        
         document.getElementById('stat-str').innerText = p.str;
         document.getElementById('stat-wis').innerText = p.wis;
         document.getElementById('stat-gold').innerText = p.gold;
@@ -862,6 +893,15 @@
         document.querySelectorAll('.content > div').forEach(el => el.classList.add('hidden'));
         const target = document.getElementById('tab-' + tabName);
         if (target) target.classList.remove('hidden');
+        
+        // Auto-scroll tavern chat to bottom when opening it
+        if (tabName === 'chat') {
+            displayChat();
+            setTimeout(() => {
+                const chatLog = document.getElementById('chat-log');
+                if (chatLog) chatLog.scrollTop = chatLog.scrollHeight;
+            }, 50);
+        }
         
         // Load profile data when opening profile tab
         if (tabName === 'profile' && p) {
@@ -919,19 +959,40 @@
     // GRINDING
     // ============================================
     function doGrind() {
+        // Check if already dead
+        if (p.hp <= 0) {
+            addLog(`<span style="color:#ff4444;">You are too weak to fight. Rest to recover!</span>`);
+            return;
+        }
+        
         const xpGain = Math.floor(10 + Math.random() * 20);
         const goldGain = Math.floor(5 + Math.random() * 15);
+        
+        // Enemies deal damage: enough to need resting but not a struggle
+        // ~5-12% of maxHp per fight, so roughly 8-20 fights before needing rest
+        const dmgPercent = 0.05 + Math.random() * 0.07;
+        const damage = Math.max(1, Math.floor(p.maxHp * dmgPercent));
         
         p.xp += xpGain;
         p.gold += goldGain;
         p.kills++;
+        p.hp -= damage;
         
         // Track war kills if in active war
         if (p.guild) {
             checkAndUpdateWarKills(p.guild);
         }
         
-        addLog(`You slay a Void Wraith. <span style="color:var(--gold)">+${xpGain} XP, +${goldGain} Gold</span>`);
+        addLog(`You slay a Void Wraith. <span style="color:var(--gold)">+${xpGain} XP, +${goldGain} Gold</span> <span style="color:#ff6666;">-${damage} HP</span>`);
+        
+        // Check for death — lose all gold
+        if (p.hp <= 0) {
+            p.hp = 0;
+            const goldLost = p.gold;
+            p.gold = 0;
+            addLog(`<span style="color:#ff4444; font-weight:bold;">☠ You have fallen! Your ${goldLost} gold scatters into the void...</span>`);
+            showToast('defeat', '☠ Fallen!', 'You collapsed in the Frontier', `${goldLost > 0 ? `Lost ${goldLost} gold — Rest to recover` : 'Rest to recover'}`);
+        }
         
         while (p.xp >= p.level * 100) {
             p.xp -= p.level * 100;
@@ -940,7 +1001,7 @@
             p.hp = p.maxHp;
             p.str += 2;
             p.wis += 2;
-            addLog(`<span style="color:#4af; font-weight:bold;">LEVEL UP! You are now level ${p.level}.</span>`);
+            addLog(`<span style="color:#4af; font-weight:bold;">LEVEL UP! You are now level ${p.level}. HP fully restored!</span>`);
         }
         
         refreshUI();
@@ -948,7 +1009,7 @@
     }
 
     function doRest() {
-        const healAmount = 50;
+        const healAmount = Math.floor(p.maxHp * 0.5);
         const oldHp = p.hp;
         p.hp = Math.min(p.maxHp, p.hp + healAmount);
         const actualHeal = p.hp - oldHp;
@@ -956,81 +1017,10 @@
         if (actualHeal === 0) {
             addLog(`<span style="color:#888;">You are already at full health.</span>`);
         } else {
-            addLog(`<span style="color:#44ff44;">You rest and recover. +${actualHeal} HP</span>`);
+            addLog(`<span style="color:#44ff44;">You rest and recover. +${actualHeal} HP (${p.hp}/${p.maxHp})</span>`);
             refreshUI();
             markDirty();
         }
-    }
-
-    // ============================================
-    // VOID GATE (Dungeon)
-    // ============================================
-    function updateGateUI(state) {
-        const desc = document.getElementById('gate-desc');
-        const status = document.getElementById('gate-status');
-        const actions = document.getElementById('gate-actions');
-        
-        if (!desc || !status || !actions) return;
-        
-        if (state === 'CLOSED') {
-            desc.innerText = 'The gate is sealed shut. Only the strongest can break it open.';
-            status.innerHTML = '<p style="color:#888;">Status: <span style="color:#ff4444; font-weight:bold;">CLOSED</span></p>';
-            
-            if (currentUser === ADMIN) {
-                actions.innerHTML = '<button class="action-btn" onclick="openGate()" style="background:var(--admin); border-color:var(--admin);">🔓 Open Gate (Admin)</button>';
-            } else {
-                actions.innerHTML = '<p style="color:#666;">You are not strong enough to open it alone...</p>';
-            }
-        } else if (state === 'OPEN') {
-            desc.innerText = 'The gate groans open. A horrifying presence emanates from within.';
-            status.innerHTML = '<p style="color:#888;">Status: <span style="color:#44ff44; font-weight:bold;">OPEN</span></p>';
-            actions.innerHTML = '<button class="action-btn" onclick="enterGate()">Enter the Gate</button>';
-        } else if (state === 'ENTERED') {
-            desc.innerText = 'You stand before an ancient horror...';
-            status.innerHTML = `<p style="color:#888;">Boss: <span style="color:#ff4444; font-weight:bold;">Void Titan</span> | HP: ${gameState.bossHp || 5000}</p>`;
-            actions.innerHTML = '<button class="action-btn" onclick="attackBoss()">⚔ Attack Boss</button>';
-        }
-    }
-
-    function openGate() {
-        if (currentUser !== ADMIN) return;
-        gameState.gate = 'OPEN';
-        gameState.bossHp = 5000;
-        updateGateUI('OPEN');
-        sendSystemChat('🌀 The Void Gate has been opened by the Void Master!');
-        markDirty();
-    }
-
-    function enterGate() {
-        if (gameState.gate !== 'OPEN') return;
-        gameState.gate = 'ENTERED';
-        updateGateUI('ENTERED');
-        addLog('<span style="color:#ff4444">You step into the abyss...</span>');
-        markDirty();
-    }
-
-    function attackBoss() {
-        if (gameState.gate !== 'ENTERED') return;
-        
-        const dmg = Math.floor(p.str * 2 + Math.random() * 50);
-        gameState.bossHp -= dmg;
-        
-        addLog(`You strike the Void Titan for <span style="color:#ff4444">${dmg}</span> damage.`);
-        
-        if (gameState.bossHp <= 0) {
-            gameState.gate = 'CLOSED';
-            const reward = 1000;
-            p.gold += reward;
-            p.xp += 500;
-            addLog(`<span style="color:var(--gold); font-weight:bold;">BOSS DEFEATED! +${reward} Gold, +500 XP</span>`);
-            sendSystemChat(`🏆 ${currentUser} has slain the Void Titan!`);
-            updateGateUI('CLOSED');
-        } else {
-            updateGateUI('ENTERED');
-        }
-        
-        refreshUI();
-        markDirty();
     }
 
     // ============================================
@@ -1076,24 +1066,39 @@
         const pl = gameState.players[username];
         if (!pl) return;
         
-        const guildName = pl.guild && gameState.guilds[pl.guild] ? gameState.guilds[pl.guild].name : 'None';
+        window._lastTab = currentTab;
+        
+        const guildName = pl.guild && gameState.guilds[pl.guild] ? `【${gameState.guilds[pl.guild].tag}】${gameState.guilds[pl.guild].name}` : 'None';
         const displayName = pl.displayName || username;
         const avatar = pl.avatar || '⚔️';
         const bio = pl.bio || 'No bio set.';
+        const isOnline = pl.online && (Date.now() - (pl.lastSeen || 0)) < 120000;
+        const onlineText = isOnline ? '<span style="color:#44ff44;">● Online</span>' : '<span style="color:#666;">● Offline</span>';
         
-        alert(
-            `${avatar} ${displayName} ${avatar}\n\n` +
-            `"${bio}"\n\n` +
-            `───────────────\n` +
-            `Account: ${username}\n` +
-            `Race: ${pl.race}\n` +
-            `Level: ${pl.level}\n` +
-            `HP: ${pl.hp}/${pl.maxHp}\n` +
-            `STR: ${pl.str} | WIS: ${pl.wis}\n` +
-            `Gold: ${pl.gold}\n` +
-            `Guild: ${guildName}\n` +
-            `Kills: ${pl.kills} | Deaths: ${pl.deaths}`
-        );
+        let html = `<div class="profile-page-header">`;
+        html += `<div class="profile-page-avatar">${avatar}</div>`;
+        html += `<div>`;
+        html += `<h2 style="margin:0; color:var(--gold);">${displayName}</h2>`;
+        html += `<div style="color:#888; font-size:0.85rem; margin-top:4px;">${username} · ${pl.race} · ${onlineText}</div>`;
+        html += `<div style="color:#666; font-size:0.85rem; margin-top:2px;">Guild: <span style="color:#4af;">${guildName}</span></div>`;
+        html += `</div></div>`;
+        
+        if (bio !== 'No bio set.') {
+            html += `<div style="border-left:3px solid #333; padding:10px 15px; margin-bottom:20px; color:#aaa; font-style:italic;">"${bio}"</div>`;
+        }
+        
+        html += `<div class="profile-page-stats">`;
+        html += `<div class="profile-stat-card"><div class="stat-label">Level</div><div class="stat-value">${pl.level}</div></div>`;
+        html += `<div class="profile-stat-card"><div class="stat-label">HP</div><div class="stat-value">${pl.hp}/${pl.maxHp}</div></div>`;
+        html += `<div class="profile-stat-card"><div class="stat-label">STR</div><div class="stat-value">${pl.str}</div></div>`;
+        html += `<div class="profile-stat-card"><div class="stat-label">WIS</div><div class="stat-value">${pl.wis}</div></div>`;
+        html += `<div class="profile-stat-card"><div class="stat-label">Gold</div><div class="stat-value">${(pl.gold || 0).toLocaleString()}</div></div>`;
+        html += `<div class="profile-stat-card"><div class="stat-label">Total Kills</div><div class="stat-value">${(pl.kills || 0).toLocaleString()}</div></div>`;
+        html += `</div>`;
+        
+        const container = document.getElementById('playerview-content');
+        if (container) container.innerHTML = html;
+        goTab('playerview');
     }
 
     // ============================================
@@ -1102,6 +1107,9 @@
     function refreshShop() {
         const container = document.getElementById('shop-items');
         if (!container) return;
+        
+        const goldDisplay = document.getElementById('shop-gold');
+        if (goldDisplay) goldDisplay.innerText = p.gold || 0;
         
         const items = [
             { name: 'Strength Elixir', cost: 200, desc: '+2 STR permanently', effect: () => { p.str += 2; } },
@@ -1115,11 +1123,14 @@
         
         let html = '<div style="display:flex; flex-wrap:wrap; gap:10px;">';
         items.forEach((item, i) => {
-            html += `<div style="border:1px solid #333; padding:15px; flex:1; min-width:200px;">`;
+            const canAfford = p.gold >= item.cost;
+            const borderColor = canAfford ? '#333' : '#222';
+            const costColor = canAfford ? 'var(--gold)' : '#ff4444';
+            html += `<div style="border:1px solid ${borderColor}; padding:15px; flex:1; min-width:200px;${!canAfford ? ' opacity:0.6;' : ''}">`;
             html += `<h3 style="margin:0 0 5px 0; color:var(--gold);">${item.name}</h3>`;
             html += `<p style="color:#888; font-size:0.85rem; margin:5px 0;">${item.desc}</p>`;
-            html += `<p style="color:var(--gold); font-weight:bold; margin:10px 0;">Cost: ${item.cost} Gold</p>`;
-            html += `<button class="action-btn" onclick="buyItem(${i})">Purchase</button>`;
+            html += `<p style="color:${costColor}; font-weight:bold; margin:10px 0;">Cost: ${item.cost} Gold</p>`;
+            html += `<button class="action-btn" onclick="buyItem(${i})">${canAfford ? 'Purchase' : 'Cannot Afford'}</button>`;
             html += `</div>`;
         });
         html += '</div>';
@@ -1133,14 +1144,16 @@
         if (!item) return;
         
         if (p.gold < item.cost) {
-            addLog('<span style="color:#ff4444;">Not enough gold!</span>');
+            showToast('error', 'Not Enough Gold', `You need ${item.cost} gold`, `You have ${p.gold} gold`);
             return;
         }
         
         p.gold -= item.cost;
         item.effect();
         addLog(`<span style="color:var(--gold);">Purchased ${item.name}.</span>`);
+        showToast('purchase', '🛒 Purchased!', item.name, `${item.desc} · -${item.cost} Gold`);
         refreshUI();
+        refreshShop();
         markDirty();
     }
 
@@ -1167,9 +1180,15 @@
             const displayName = data.displayName || name;
             const avatar = data.avatar || '⚔️';
             
-            html += `<div style="border:1px solid #333; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">`;
-            html += `<span>${onlineText} ${avatar} <span class="name-link" onclick="showPlayerCard('${name}')">${displayName}</span> (Lv ${data.level})</span>`;
-            html += `<button class="action-btn" onclick="attackPlayer('${name}')">⚔ Attack</button>`;
+            const myPower = p.level * 10 + p.str * 5;
+            const theirPower = data.level * 10 + data.str * 5;
+            const winChance = Math.round((myPower / (myPower + theirPower)) * 100);
+            const chanceColor = winChance >= 60 ? '#44ff44' : winChance >= 40 ? '#ffaa00' : '#ff4444';
+            
+            html += `<div style="border:1px solid #333; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">`;
+            html += `<span>${onlineText} ${avatar} <span class="name-link" onclick="showPlayerCard('${name}')">${displayName}</span> (Lv ${data.level}) · <span style="color:var(--gold);">⚜ ${(data.gold || 0).toLocaleString()}</span></span>`;
+            html += `<span style="display:flex; align-items:center; gap:10px;"><span style="color:${chanceColor}; font-size:0.8rem;">${winChance}% win</span>`;
+            html += `<button class="action-btn" onclick="attackPlayer('${name}')">⚔ Attack</button></span>`;
             html += `</div>`;
         });
         
@@ -1188,28 +1207,44 @@
         const chance = myPower / (myPower + theirPower);
         
         if (Math.random() < chance) {
-            const goldStolen = Math.floor(target.gold * 0.1);
+            const goldStolen = target.gold;
             const xpGain = target.level * 20;
             
             p.gold += goldStolen;
             p.xp += xpGain;
             p.kills++;
-            target.gold = Math.max(0, target.gold - goldStolen);
+            target.gold = 0;
             target.deaths++;
             
             addLog(`<span style="color:#44ff44;">Victory!</span> You defeated ${targetDisplay}. <span style="color:var(--gold)">+${goldStolen} Gold, +${xpGain} XP</span>`);
             sendSystemChat(`⚔ ${myDisplay} has defeated ${targetDisplay} in the Arena!`);
+            showToast('victory', '⚔ Victory!', `You defeated ${targetDisplay}`, `+${goldStolen} Gold · +${xpGain} XP`);
         } else {
-            const goldLost = Math.floor(p.gold * 0.05);
-            p.gold = Math.max(0, p.gold - goldLost);
+            const goldLost = p.gold;
+            p.gold = 0;
             p.deaths++;
             target.kills++;
+            target.gold += goldLost;
             
             addLog(`<span style="color:#ff4444;">Defeat!</span> ${targetDisplay} bested you. <span style="color:#ff4444;">-${goldLost} Gold</span>`);
+            showToast('defeat', '💀 Defeat', `${targetDisplay} bested you`, `${goldLost > 0 ? `-${goldLost} Gold stolen` : 'No gold to lose'}`);
         }
         
         refreshUI();
+        refreshPvpTargets();
         markDirty();
+    }
+
+    function showToast(type, title, message, detail) {
+        // Remove any existing toasts
+        document.querySelectorAll('.result-toast').forEach(t => t.remove());
+        
+        const toast = document.createElement('div');
+        toast.className = `result-toast ${type}`;
+        toast.innerHTML = `<div class="toast-title">${title}</div><div>${message}</div>${detail ? `<div class="toast-detail">${detail}</div>` : ''}`;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3000);
     }
 
     // ============================================
@@ -1229,9 +1264,17 @@
                 html += '<p style="color:#666;">No guilds exist yet.</p>';
             } else {
                 guilds.forEach(([id, guild]) => {
+                    const isFull = guild.members.length >= 10;
                     html += `<div style="border:1px solid #333; padding:10px; margin-bottom:5px;">`;
-                    html += `<strong style="color:#4af;">【${guild.tag}】${guild.name}</strong> - ${guild.members.length} members`;
-                    html += ` <button class="action-btn" onclick="joinGuild('${id}')">Request to Join</button>`;
+                    html += `<strong style="color:#4af;">【${guild.tag}】${guild.name}</strong> - ${guild.members.length}/10 members`;
+                    if (guild.blurb) {
+                        html += `<div style="color:#999; font-size:0.85rem; margin-top:4px; font-style:italic;">"${guild.blurb}"</div>`;
+                    }
+                    if (isFull) {
+                        html += ` <span style="color:#ff4444; font-size:0.85rem;">(Full)</span>`;
+                    } else {
+                        html += ` <button class="action-btn" onclick="joinGuild('${id}')">Request to Join</button>`;
+                    }
                     html += `</div>`;
                 });
             }
@@ -1250,7 +1293,42 @@
             
             let html = `<h3 style="color:#4af;">【${guild.tag}】${guild.name}</h3>`;
             html += `<p>Leader: ${guild.leader}</p>`;
-            html += `<p>Members (${guild.members.length}): ${guild.members.join(', ')}</p>`;
+            
+            // Show blurb
+            if (guild.blurb) {
+                html += `<div style="border-left:3px solid #333; padding:8px 12px; margin:10px 0; color:#999; font-style:italic;">"${guild.blurb}"</div>`;
+            }
+            
+            // Leader can edit blurb
+            if (isLeader) {
+                html += `<div style="margin:10px 0;">`;
+                html += `<label style="display:block; color:#888; font-size:0.8rem; margin-bottom:4px;">Guild Tagline</label>`;
+                html += `<div style="display:flex; gap:5px; align-items:flex-start;">`;
+                html += `<textarea id="guild-blurb-input" placeholder="Add a tagline or requirements..." style="flex:1; height:50px; background:#111; border:1px solid #333; color:white; padding:8px; font-family:inherit; resize:vertical; font-size:0.85rem;">${guild.blurb || ''}</textarea>`;
+                html += `<button class="action-btn" onclick="saveGuildBlurb()" style="white-space:nowrap;">Save</button>`;
+                html += `</div>`;
+                html += `<p style="color:#555; font-size:0.75rem; margin-top:3px;">Max 150 chars. Visible to all players.</p>`;
+                html += `</div>`;
+            }
+            
+            html += `<p>Members (${guild.members.length}/10):</p>`;
+            
+            // List members with kick buttons for leader
+            html += '<div style="margin:10px 0;">';
+            guild.members.forEach(member => {
+                const memberData = gameState.players[member];
+                const memberDisplay = memberData?.displayName || member;
+                const memberAvatar = memberData?.avatar || '⚔️';
+                const isLeaderMember = member === guild.leader;
+                
+                html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; border-bottom:1px solid #222;">`;
+                html += `<span>${memberAvatar} <span class="name-link" onclick="showPlayerCard('${member}')">${memberDisplay}</span>${isLeaderMember ? ' <span style="color:var(--gold); font-size:0.8rem;">👑 Leader</span>' : ''}</span>`;
+                if (isLeader && !isLeaderMember) {
+                    html += `<button class="action-btn" onclick="kickMember('${member}')" style="font-size:0.75rem; padding:5px 10px; background:#3a0000;">Kick</button>`;
+                }
+                html += `</div>`;
+            });
+            html += '</div>';
             
             if (isLeader) {
                 html += '<button class="action-btn" onclick="disbandGuild()" style="background:#8b0000;">Disband Guild</button>';
@@ -1258,6 +1336,22 @@
             }
             
             html += '<button class="action-btn" onclick="leaveGuild()">Leave Guild</button>';
+            
+            // Show other guilds
+            const otherGuilds = Object.entries(gameState.guilds).filter(([id]) => id !== p.guild);
+            if (otherGuilds.length > 0) {
+                html += '<div style="margin-top:30px; border-top:1px solid #222; padding-top:15px;">';
+                html += '<h4 style="color:#888;">Other Guilds</h4>';
+                otherGuilds.forEach(([id, g]) => {
+                    html += `<div style="border:1px solid #222; padding:10px; margin-bottom:5px;">`;
+                    html += `<strong style="color:#4af;">【${g.tag}】${g.name}</strong> - ${g.members.length}/10 members`;
+                    if (g.blurb) {
+                        html += `<div style="color:#999; font-size:0.85rem; margin-top:4px; font-style:italic;">"${g.blurb}"</div>`;
+                    }
+                    html += `</div>`;
+                });
+                html += '</div>';
+            }
             
             container.innerHTML = html;
         }
@@ -1284,6 +1378,7 @@
             tag: tag.toUpperCase(),
             leader: currentUser,
             members: [currentUser],
+            blurb: '',
             createdAt: Date.now()
         };
         
@@ -1298,12 +1393,37 @@
         markDirty();
     }
 
+    function saveGuildBlurb() {
+        if (!p.guild) return;
+        const guild = gameState.guilds[p.guild];
+        if (!guild || guild.leader !== currentUser) return;
+        
+        const input = document.getElementById('guild-blurb-input');
+        if (!input) return;
+        
+        let blurb = input.value.trim();
+        if (blurb.length > 150) {
+            blurb = blurb.substring(0, 150);
+        }
+        
+        guild.blurb = blurb;
+        markDirty();
+        
+        showToast('purchase', '✓ Saved', 'Guild tagline updated', '');
+        refreshGuildUI();
+    }
+
     function joinGuild(guildId) {
         const guild = gameState.guilds[guildId];
         if (!guild) return;
         
         if (guild.members.includes(currentUser)) {
             alert('You are already in this guild.');
+            return;
+        }
+        
+        if (guild.members.length >= 10) {
+            alert('This guild is full (10/10 members).');
             return;
         }
         
@@ -1314,6 +1434,29 @@
         sendSystemChat(`🏰 ${currentUser} has joined 【${guild.tag}】${guild.name}!`);
         
         refreshUI();
+        refreshGuildUI();
+        markDirty();
+    }
+
+    function kickMember(memberName) {
+        if (!p.guild) return;
+        const guild = gameState.guilds[p.guild];
+        if (!guild || guild.leader !== currentUser) return;
+        if (memberName === currentUser) return;
+        
+        const memberData = gameState.players[memberName];
+        const memberDisplay = memberData?.displayName || memberName;
+        
+        if (!confirm(`Kick ${memberDisplay} from the guild?`)) return;
+        
+        guild.members = guild.members.filter(m => m !== memberName);
+        if (gameState.players[memberName]) {
+            gameState.players[memberName].guild = null;
+        }
+        
+        addLog(`<span style="color:#ff4444;">You kicked ${memberDisplay} from the guild.</span>`);
+        sendSystemChat(`🏰 ${memberDisplay} has been kicked from 【${guild.tag}】${guild.name}.`);
+        
         refreshGuildUI();
         markDirty();
     }
@@ -1366,36 +1509,42 @@
         const guild = gameState.guilds[p.guild];
         if (!guild || guild.leader !== currentUser) return;
         
-        const targetGuilds = Object.entries(gameState.guilds)
+        // Find other guilds not already at war with us
+        const otherGuilds = Object.entries(gameState.guilds)
             .filter(([id]) => id !== p.guild)
-            .map(([id, g]) => `${id}:【${g.tag}】${g.name}`)
-            .join('\n');
+            .filter(([id]) => {
+                // Check no active war between us and them
+                return !gameState.wars.some(w => 
+                    w.status === 'active' && 
+                    ((w.attacker === p.guild && w.defender === id) || 
+                     (w.attacker === id && w.defender === p.guild))
+                );
+            });
         
-        if (!targetGuilds) {
-            alert('No other guilds to declare war on.');
+        if (otherGuilds.length === 0) {
+            alert('No eligible guilds to declare war on.');
             return;
         }
         
-        const choice = prompt(`Declare war on:\n${targetGuilds}\n\nEnter guild ID:`);
-        if (!choice || !gameState.guilds[choice]) return;
+        // Sort by similarity in member count (closest first)
+        const mySize = guild.members.length;
+        otherGuilds.sort((a, b) => {
+            const diffA = Math.abs(a[1].members.length - mySize);
+            const diffB = Math.abs(b[1].members.length - mySize);
+            return diffA - diffB;
+        });
         
-        // Check if already at war
-        const existingWar = gameState.wars.find(w => 
-            w.status === 'active' && 
-            ((w.attacker === p.guild && w.defender === choice) || 
-             (w.attacker === choice && w.defender === p.guild))
-        );
+        // Pick randomly from the closest-sized guilds (top 3 or all if fewer)
+        const pool = otherGuilds.slice(0, Math.min(3, otherGuilds.length));
+        const [targetId, targetGuild] = pool[Math.floor(Math.random() * pool.length)];
         
-        if (existingWar) {
-            alert('Already at war with this guild!');
+        if (!confirm(`Declare war on 【${targetGuild.tag}】${targetGuild.name} (${targetGuild.members.length} members)?\n\nFirst to 20,000 frontier kills wins!`)) {
             return;
         }
-        
-        const targetGuild = gameState.guilds[choice];
         
         gameState.wars.push({
             attacker: p.guild,
-            defender: choice,
+            defender: targetId,
             attackerTag: guild.tag,
             defenderTag: targetGuild.tag,
             attackerName: guild.name,
@@ -1585,6 +1734,25 @@
         
         log.innerHTML = '';
         gameState.chat.slice(-50).forEach(msg => {
+            // Filter: only show player messages, war declarations, and news
+            if (msg.user === 'SYSTEM') {
+                const text = msg.text;
+                // Allow: war declarations, war endings, news, boss kills, guild founding/disbanding, void gate
+                const isWar = text.includes('WAR') || text.includes('⚔ WAR');
+                const isNews = text.includes('📰');
+                const isBoss = text.includes('slain the Void Titan');
+                const isGuildEvent = text.includes('founded the guild') || text.includes('has been disbanded');
+                const isBackup = text.includes('backup');
+                
+                // Skip: logins ("entered the Void"), arena attacks ("defeated X in the Arena"), guild joins
+                const isLogin = text.includes('has entered the Void');
+                const isArenaAttack = text.includes('in the Arena');
+                const isGuildJoin = text.includes('has joined');
+                
+                if (isLogin || isArenaAttack || isGuildJoin) return;
+                if (!(isWar || isNews || isBoss || isGuildEvent || isBackup)) return;
+            }
+            
             const div = document.createElement('div');
             div.style.marginBottom = '5px';
             
@@ -1860,7 +2028,6 @@
                 // Force cloud sync
                 saveToCloud(true);
                 
-                updateGateUI(gameState.gate);
                 updatePlayerCount();
 
                 status.style.color = '#44ff44';
