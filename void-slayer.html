@@ -87,6 +87,28 @@
             input, select { width: 100%; }
             #chat-in { width: 65% !important; }
         }
+        /* Boss System */
+        .boss-card { border: 1px solid #333; padding: 15px; margin-bottom: 12px; background: #0a0a0a; position: relative; overflow: hidden; }
+        .boss-card.locked { opacity: 0.4; pointer-events: none; }
+        .boss-card .boss-tier { position: absolute; top: 0; right: 0; padding: 4px 10px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; }
+        .boss-hp-bar { background: #222; height: 22px; border: 1px solid #444; position: relative; overflow: hidden; margin: 10px 0; }
+        .boss-hp-fill { height: 100%; transition: width 0.3s; }
+        .boss-hp-text { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-family: monospace; color: #fff; text-shadow: 0 0 4px #000; }
+        .boss-reward-tag { display: inline-block; padding: 2px 8px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; margin-right: 5px; }
+        .boss-reward-tag.xp { background: rgba(68,170,255,0.15); color: #4af; border: 1px solid #4af; }
+        .boss-reward-tag.gold { background: rgba(212,175,55,0.15); color: var(--gold); border: 1px solid var(--gold); }
+        .boss-reward-tag.item { background: rgba(170,68,255,0.15); color: #a4f; border: 1px solid #a4f; }
+
+        /* Trophy Rarity Colors */
+        .rarity-common { color: #aaa; border-color: #aaa; }
+        .rarity-uncommon { color: #44ff44; border-color: #44ff44; }
+        .rarity-rare { color: #4488ff; border-color: #4488ff; }
+        .rarity-epic { color: #aa44ff; border-color: #aa44ff; }
+        .rarity-legendary { color: #ff8800; border-color: #ff8800; }
+
+        .trophy-item { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; margin: 4px; border: 1px solid; background: rgba(20,20,25,0.9); font-size: 0.85rem; }
+        .trophy-grid { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+
     </style>
 </head>
 <body>
@@ -155,13 +177,14 @@
 <div id="nav-overlay" onclick="closeMenu()"></div>
 
 <nav id="main-nav">
-    <h2 style="color:var(--accent)">VOID MENU</h2>
+    <h2 style="color:var(--accent)">VOID SLAYER</h2>
     <div class="nav-link" onclick="goTab('grind')">The Frontier</div>
     <div class="nav-link" onclick="goTab('lead'); loadLeaderboard();">Leaderboard</div>
     <div class="nav-link" onclick="goTab('shop'); refreshShop();">Black Market</div>
     <div class="nav-link" onclick="goTab('pvp'); refreshPvpTargets();">The Arena</div>
     <div class="nav-link" onclick="goTab('guild'); refreshGuildUI();">Guild Hall</div>
     <div class="nav-link" onclick="goTab('wars'); refreshWarsUI();">Guild Wars</div>
+    <div class="nav-link" onclick="goTab('bosses'); refreshBossUI();">Bosses</div>
     <div class="nav-link" onclick="goTab('chat'); displayChat();">Tavern</div>
     <div class="nav-link" onclick="goTab('profile')">Profile</div>
     <div class="nav-link" onclick="goTab('news'); refreshNews();">News</div>
@@ -253,6 +276,16 @@
             </div>
         </div>
 
+        <!-- BOSSES TAB -->
+        <div id="tab-bosses" class="hidden">
+            <div class="card">
+                <h2>🔥 Boss Arena</h2>
+                <p style="color:#888;">Ancient terrors await. New bosses unlock every 10 levels. Defeat them for legendary trophies and massive rewards. <span style="color:#ff4444; font-weight:bold;">There is no rest here.</span></p>
+                <div id="boss-list"></div>
+                <div id="boss-fight-area" class="hidden" style="margin-top:20px;"></div>
+            </div>
+        </div>
+
         <!-- CHAT TAB -->
         <div id="tab-chat" class="hidden">
             <div class="card">
@@ -309,6 +342,11 @@
                 <button class="action-btn" onclick="saveProfile()">Save Changes</button>
                 
                 <div id="profile-status" style="margin-top:15px; font-size:0.9rem; color:#888;"></div>
+                
+                <div style="margin-top:30px; border-top:1px solid #222; padding-top:20px;">
+                    <h3 style="color:var(--gold);">🏆 Trophy Collection</h3>
+                    <div id="profile-trophies"></div>
+                </div>
             </div>
         </div>
 
@@ -650,6 +688,14 @@
     }
 
     function markDirty() {
+        // Verify stat integrity before saving (skip if inside a gameAction)
+        if (!_actionActive && p && p._sig && _lastGoodSnap) {
+            if (!_verifyIntegrity()) {
+                _revertStats();
+                return; // Don't save tampered data
+            }
+        }
+
         isDirty = true;
         
         // Always save to localStorage immediately
@@ -767,7 +813,9 @@
                     deaths: 0,
                     online: true,
                     lastSeen: Date.now(),
-                    createdAt: Date.now()
+                    createdAt: Date.now(),
+                    bossData: {},
+                    trophies: []
                 };
                 markDirty();
             } else {
@@ -792,6 +840,7 @@
         
             addLog(`<span style="color:var(--gold)">Welcome, ${username}.</span>`);
             sendSystemChat(`⚔ ${username} has entered the Void.`);
+            _stampIntegrity();
             authDebug('Login complete!');
         } catch (err) {
             console.warn('Login error:', err);
@@ -956,6 +1005,21 @@
             if (bioInput) {
                 bioInput.value = p.bio || '';
             }
+            
+            // Render trophy collection
+            const trophyContainer = document.getElementById('profile-trophies');
+            if (trophyContainer) {
+                if (p.trophies && p.trophies.length > 0) {
+                    let tHtml = renderTrophies(p.trophies);
+                    // Also add stat summary
+                    let totalStr = 0, totalWis = 0, totalHp = 0;
+                    p.trophies.forEach(t => { totalStr += t.str; totalWis += t.wis; totalHp += t.hp; });
+                    tHtml += `<div style="margin-top:10px; color:#888; font-size:0.85rem;">Total trophy bonuses: <span style="color:var(--gold);">+${totalStr} STR, +${totalWis} WIS, +${totalHp} HP</span> from ${p.trophies.length} trophies</div>`;
+                    trophyContainer.innerHTML = tHtml;
+                } else {
+                    trophyContainer.innerHTML = '<p style="color:#666;">No trophies yet. Defeat bosses to earn them!</p>';
+                }
+            }
         }
         
         closeMenu();
@@ -991,6 +1055,7 @@
             return;
         }
         
+        gameAction(() => {
         const xpGain = Math.floor(10 + Math.random() * 20);
         const goldGain = Math.floor(5 + Math.random() * 15);
         
@@ -1030,9 +1095,11 @@
         
         refreshUI();
         markDirty();
+        });
     }
 
     function doRest() {
+        gameAction(() => {
         const healAmount = Math.floor(p.maxHp * 0.5);
         const oldHp = p.hp;
         p.hp = Math.min(p.maxHp, p.hp + healAmount);
@@ -1045,6 +1112,7 @@
             refreshUI();
             markDirty();
         }
+        });
     }
 
     // ============================================
@@ -1130,6 +1198,9 @@
         html += `<div class="profile-stat-card"><div class="stat-label">Total Kills</div><div class="stat-value">${(pl.kills || 0).toLocaleString()}</div></div>`;
         html += `</div>`;
         
+        // Show trophies
+        html += renderTrophies(pl.trophies);
+        
         const container = document.getElementById('playerview-content');
         if (container) container.innerHTML = html;
         goTab('playerview');
@@ -1182,6 +1253,7 @@
             return;
         }
         
+        gameAction(() => {
         p.gold -= item.cost;
         item.effect();
         addLog(`<span style="color:var(--gold);">Purchased ${item.name}.</span>`);
@@ -1189,6 +1261,7 @@
         refreshUI();
         refreshShop();
         markDirty();
+        });
     }
 
     // ============================================
@@ -1260,6 +1333,7 @@
         const theirPower = target.level * 10 + target.str * 5;
         const chance = myPower / (myPower + theirPower);
         
+        gameAction(() => {
         if (Math.random() < chance) {
             const goldStolen = target.gold;
             const xpGain = target.level * 20;
@@ -1287,6 +1361,7 @@
         refreshUI();
         refreshPvpTargets();
         markDirty();
+        });
     }
 
     function showToast(type, title, message, detail) {
@@ -1464,8 +1539,11 @@
             createdAt: Date.now()
         };
         
+        gameAction(() => {
         p.guild = guildId;
         p.gold -= 500;
+        markDirty();
+        });
         
         addLog(`<span style="color:#4af;">Guild 【${tag.toUpperCase()}】${name} created!</span>`);
         sendSystemChat(`🏰 ${currentUser} has founded the guild 【${tag.toUpperCase()}】${name}!`);
@@ -2200,7 +2278,9 @@
                 createdAt: Date.now(),
                 displayName: pl.displayName,
                 avatar: pl.avatar,
-                bio: pl.bio
+                bio: pl.bio,
+                bossData: {},
+                trophies: []
             };
         });
         
@@ -2210,6 +2290,7 @@
         
         // Reset current player ref
         p = gameState.players[currentUser];
+        _stampIntegrity();
         refreshUI();
         markDirty();
         refreshAdminConsole();
@@ -2239,10 +2320,12 @@
             str: adminRace === 'Hollow' ? 11 : 10,
             wis: adminRace === 'Wraith' ? 11 : 10,
             gold: 0, guild: null, kills: 0, deaths: 0,
-            online: true, lastSeen: Date.now(), createdAt: Date.now()
+            online: true, lastSeen: Date.now(), createdAt: Date.now(),
+            bossData: {}, trophies: []
         };
         
         p = gameState.players[ADMIN];
+        _stampIntegrity();
         refreshUI();
         markDirty();
         refreshAdminConsole();
@@ -2288,6 +2371,7 @@
             return;
         }
         gameState.players[target].gold += amount;
+        if (target === currentUser) _stampIntegrity();
         markDirty();
         refreshAdminConsole();
         showToast('purchase', '💰 Gold Given', `${amount} gold to ${target}`, '');
@@ -2391,6 +2475,7 @@
                 // Reload own player data if present
                 if (gameState.players[currentUser]) {
                     Object.assign(p, gameState.players[currentUser]);
+                    _stampIntegrity();
                     refreshUI();
                 }
 
@@ -2415,6 +2500,573 @@
         event.target.value = '';
     }
 
+    // ============================================
+    // STAT INTEGRITY / ANTI-CHEAT SYSTEM
+    // ============================================
+    // Uses FNV-1a hash + HMAC-style signing to detect console/injection tampering.
+    // All stat mutations must go through gameAction() wrapper.
+
+    const _SEED = [0x56,0x30,0x49,0x44,0x2d,0x53,0x4c,0x41,0x59,0x33,0x52].map((c,i)=>String.fromCharCode(c^(0x1f+i))).join('');
+    let _lastGoodSnap = null;
+    let _actionActive = false;
+
+    function _fnv1a(str) {
+        let h = 0x811c9dc5;
+        for (let i = 0; i < str.length; i++) {
+            h ^= str.charCodeAt(i);
+            h = Math.imul(h, 0x01000193);
+        }
+        return (h >>> 0).toString(36);
+    }
+
+    function _signStats(pl) {
+        if (!pl) return '';
+        const raw = `${pl.level}|${pl.xp}|${pl.hp}|${pl.maxHp}|${pl.str}|${pl.wis}|${pl.gold}|${pl.kills}|${pl.deaths}|${_SEED}`;
+        return _fnv1a(raw);
+    }
+
+    function _snapStats(pl) {
+        if (!pl) return null;
+        return { level:pl.level, xp:pl.xp, hp:pl.hp, maxHp:pl.maxHp, str:pl.str, wis:pl.wis, gold:pl.gold, kills:pl.kills, deaths:pl.deaths };
+    }
+
+    function _stampIntegrity() {
+        if (!p) return;
+        p._sig = _signStats(p);
+        _lastGoodSnap = _snapStats(p);
+    }
+
+    function _verifyIntegrity() {
+        if (!p || !p._sig || !_lastGoodSnap) return true;
+        return _signStats(p) === p._sig;
+    }
+
+    function _revertStats() {
+        if (!_lastGoodSnap || !p) return;
+        Object.assign(p, _lastGoodSnap);
+        p._sig = _signStats(p);
+        refreshUI();
+        addLog("<span style='color:#ff4444;'>⚠ Stat tampering detected — stats reverted.</span>");
+        showToast('error', '⚠ Integrity Violation', 'Stat modification detected', 'Stats have been reverted');
+    }
+
+    // Wrap every game action that legitimately changes stats
+    function gameAction(fn) {
+        _actionActive = true;
+        try {
+            fn();
+        } finally {
+            _actionActive = false;
+            _stampIntegrity();
+        }
+    }
+
+    // Periodic integrity check (every 5 seconds)
+    setInterval(() => {
+        if (currentUser && p && p._sig) {
+            if (!_verifyIntegrity()) {
+                _revertStats();
+            }
+        }
+    }, 5000);
+
+    // ============================================
+    // BOSS SYSTEM
+    // ============================================
+    const BOSS_DEFINITIONS = [
+        {
+            id: 'shade_colossus', name: 'Shade Colossus', emoji: '👹', tier: 1, unlockLevel: 10,
+            desc: 'A towering mass of condensed shadow, born from a thousand lost souls.',
+            rewardType: 'xp', baseHp: 500, baseDamage: 15, hpPerLevel: 60, dmgPerLevel: 1.5,
+            xpReward: 800, goldReward: 0, regenPerMin: 25,
+            lootTable: [
+                { name: 'Shadow Shard', emoji: '🔮', rarity: 'common', str: 3, wis: 0, hp: 0, weight: 50 },
+                { name: 'Colossus Fragment', emoji: '💎', rarity: 'uncommon', str: 5, wis: 2, hp: 10, weight: 30 },
+                { name: 'Heart of the Colossus', emoji: '❤️‍🔥', rarity: 'rare', str: 10, wis: 5, hp: 25, weight: 15 },
+                { name: 'Shade Crown', emoji: '👑', rarity: 'epic', str: 15, wis: 10, hp: 50, weight: 4 },
+                { name: 'Colossus Soul', emoji: '✨', rarity: 'legendary', str: 25, wis: 15, hp: 80, weight: 1 }
+            ]
+        },
+        {
+            id: 'gold_wyrm', name: 'Gold Wyrm', emoji: '🐲', tier: 2, unlockLevel: 20,
+            desc: 'An ancient dragon that sleeps atop mountains of stolen gold.',
+            rewardType: 'gold', baseHp: 1200, baseDamage: 22, hpPerLevel: 80, dmgPerLevel: 1.8,
+            xpReward: 0, goldReward: 2000, regenPerMin: 40,
+            lootTable: [
+                { name: 'Wyrm Scale', emoji: '🛡️', rarity: 'common', str: 0, wis: 3, hp: 10, weight: 50 },
+                { name: 'Golden Fang', emoji: '🦷', rarity: 'uncommon', str: 4, wis: 4, hp: 15, weight: 30 },
+                { name: 'Dragonheart Gem', emoji: '💠', rarity: 'rare', str: 8, wis: 8, hp: 30, weight: 15 },
+                { name: 'Wyrm\'s Hoard Ring', emoji: '💍', rarity: 'epic', str: 12, wis: 12, hp: 60, weight: 4 },
+                { name: 'Gold Wyrm Essence', emoji: '🌟', rarity: 'legendary', str: 20, wis: 20, hp: 100, weight: 1 }
+            ]
+        },
+        {
+            id: 'void_sentinel', name: 'Void Sentinel', emoji: '🗿', tier: 3, unlockLevel: 30,
+            desc: 'An eternal guardian of the void gates, unyielding and relentless.',
+            rewardType: 'xp', baseHp: 2200, baseDamage: 30, hpPerLevel: 100, dmgPerLevel: 2.0,
+            xpReward: 2500, goldReward: 0, regenPerMin: 55,
+            lootTable: [
+                { name: 'Sentinel Stone', emoji: '🪨', rarity: 'common', str: 4, wis: 2, hp: 15, weight: 50 },
+                { name: 'Void-Touched Shield', emoji: '🛡️', rarity: 'uncommon', str: 3, wis: 6, hp: 25, weight: 30 },
+                { name: 'Sentinel\'s Eye', emoji: '👁️', rarity: 'rare', str: 10, wis: 10, hp: 40, weight: 15 },
+                { name: 'Gatekeeper\'s Mantle', emoji: '🧥', rarity: 'epic', str: 15, wis: 15, hp: 70, weight: 4 },
+                { name: 'Sentinel Core', emoji: '⚛️', rarity: 'legendary', str: 25, wis: 25, hp: 120, weight: 1 }
+            ]
+        },
+        {
+            id: 'abyssal_leviathan', name: 'Abyssal Leviathan', emoji: '🐙', tier: 4, unlockLevel: 40,
+            desc: 'A nightmare from the deepest trenches of the void ocean.',
+            rewardType: 'gold', baseHp: 3500, baseDamage: 38, hpPerLevel: 120, dmgPerLevel: 2.2,
+            xpReward: 0, goldReward: 5000, regenPerMin: 70,
+            lootTable: [
+                { name: 'Leviathan Ink', emoji: '🖤', rarity: 'common', str: 2, wis: 5, hp: 20, weight: 50 },
+                { name: 'Abyssal Tentacle', emoji: '🦑', rarity: 'uncommon', str: 6, wis: 6, hp: 30, weight: 30 },
+                { name: 'Deep Trident', emoji: '🔱', rarity: 'rare', str: 14, wis: 8, hp: 50, weight: 15 },
+                { name: 'Leviathan\'s Maw', emoji: '🌀', rarity: 'epic', str: 18, wis: 18, hp: 80, weight: 4 },
+                { name: 'Heart of the Abyss', emoji: '💜', rarity: 'legendary', str: 30, wis: 25, hp: 150, weight: 1 }
+            ]
+        },
+        {
+            id: 'eclipse_titan', name: 'Eclipse Titan', emoji: '🌑', tier: 5, unlockLevel: 50,
+            desc: 'Born when the void eclipsed the last sun, its power is absolute.',
+            rewardType: 'xp', baseHp: 5000, baseDamage: 48, hpPerLevel: 150, dmgPerLevel: 2.5,
+            xpReward: 6000, goldReward: 0, regenPerMin: 90,
+            lootTable: [
+                { name: 'Eclipse Shard', emoji: '🌘', rarity: 'common', str: 5, wis: 5, hp: 25, weight: 50 },
+                { name: 'Solar Remnant', emoji: '☀️', rarity: 'uncommon', str: 8, wis: 8, hp: 35, weight: 30 },
+                { name: 'Titan\'s Gauntlet', emoji: '🧤', rarity: 'rare', str: 18, wis: 10, hp: 60, weight: 15 },
+                { name: 'Eclipse Diadem', emoji: '👑', rarity: 'epic', str: 22, wis: 22, hp: 100, weight: 4 },
+                { name: 'Titan\'s Eclipse', emoji: '💫', rarity: 'legendary', str: 35, wis: 30, hp: 180, weight: 1 }
+            ]
+        },
+        {
+            id: 'crimson_archfiend', name: 'Crimson Archfiend', emoji: '😈', tier: 6, unlockLevel: 60,
+            desc: 'A demon lord wreathed in hellfire, commander of blood legions.',
+            rewardType: 'gold', baseHp: 7000, baseDamage: 58, hpPerLevel: 180, dmgPerLevel: 2.8,
+            xpReward: 0, goldReward: 10000, regenPerMin: 110,
+            lootTable: [
+                { name: 'Crimson Ember', emoji: '🔥', rarity: 'common', str: 6, wis: 3, hp: 30, weight: 50 },
+                { name: 'Hellfire Blade', emoji: '🗡️', rarity: 'uncommon', str: 12, wis: 5, hp: 40, weight: 30 },
+                { name: 'Archfiend\'s Horn', emoji: '🦴', rarity: 'rare', str: 20, wis: 12, hp: 70, weight: 15 },
+                { name: 'Blood Crown', emoji: '♛', rarity: 'epic', str: 28, wis: 20, hp: 120, weight: 4 },
+                { name: 'Crimson Soulfire', emoji: '🩸', rarity: 'legendary', str: 40, wis: 30, hp: 200, weight: 1 }
+            ]
+        },
+        {
+            id: 'phantom_overlord', name: 'Phantom Overlord', emoji: '👻', tier: 7, unlockLevel: 70,
+            desc: 'The undying specter that rules over all wraiths in the void.',
+            rewardType: 'xp', baseHp: 9500, baseDamage: 70, hpPerLevel: 200, dmgPerLevel: 3.0,
+            xpReward: 12000, goldReward: 0, regenPerMin: 130,
+            lootTable: [
+                { name: 'Phantom Thread', emoji: '🕸️', rarity: 'common', str: 3, wis: 8, hp: 30, weight: 50 },
+                { name: 'Spectral Chain', emoji: '⛓️', rarity: 'uncommon', str: 8, wis: 12, hp: 45, weight: 30 },
+                { name: 'Overlord\'s Gaze', emoji: '👁️', rarity: 'rare', str: 15, wis: 22, hp: 80, weight: 15 },
+                { name: 'Wraith King Crown', emoji: '👻', rarity: 'epic', str: 25, wis: 30, hp: 140, weight: 4 },
+                { name: 'Phantom Dominion', emoji: '🌌', rarity: 'legendary', str: 35, wis: 45, hp: 220, weight: 1 }
+            ]
+        },
+        {
+            id: 'doom_harbinger', name: 'Doom Harbinger', emoji: '💀', tier: 8, unlockLevel: 80,
+            desc: 'The herald of annihilation, whose very presence withers worlds.',
+            rewardType: 'gold', baseHp: 12500, baseDamage: 82, hpPerLevel: 230, dmgPerLevel: 3.2,
+            xpReward: 0, goldReward: 20000, regenPerMin: 150,
+            lootTable: [
+                { name: 'Doom Fragment', emoji: '☠️', rarity: 'common', str: 8, wis: 5, hp: 35, weight: 50 },
+                { name: 'Harbinger\'s Bell', emoji: '🔔', rarity: 'uncommon', str: 12, wis: 12, hp: 50, weight: 30 },
+                { name: 'Apocalypse Rune', emoji: '🔮', rarity: 'rare', str: 22, wis: 18, hp: 90, weight: 15 },
+                { name: 'Doomplate Armor', emoji: '🛡️', rarity: 'epic', str: 30, wis: 25, hp: 160, weight: 4 },
+                { name: 'Herald of the End', emoji: '⚡', rarity: 'legendary', str: 45, wis: 40, hp: 250, weight: 1 }
+            ]
+        },
+        {
+            id: 'void_emperor', name: 'Void Emperor', emoji: '🫅', tier: 9, unlockLevel: 90,
+            desc: 'Supreme ruler of the Void, whose power transcends mortal understanding.',
+            rewardType: 'xp', baseHp: 16000, baseDamage: 95, hpPerLevel: 260, dmgPerLevel: 3.5,
+            xpReward: 25000, goldReward: 0, regenPerMin: 180,
+            lootTable: [
+                { name: 'Void Scepter Shard', emoji: '🪄', rarity: 'common', str: 8, wis: 8, hp: 40, weight: 50 },
+                { name: 'Emperor\'s Sigil', emoji: '🏅', rarity: 'uncommon', str: 14, wis: 14, hp: 55, weight: 30 },
+                { name: 'Imperial Voidblade', emoji: '⚔️', rarity: 'rare', str: 25, wis: 20, hp: 100, weight: 15 },
+                { name: 'Void Emperor\'s Crown', emoji: '👑', rarity: 'epic', str: 35, wis: 35, hp: 180, weight: 4 },
+                { name: 'Essence of Void', emoji: '🌀', rarity: 'legendary', str: 50, wis: 50, hp: 300, weight: 1 }
+            ]
+        },
+        {
+            id: 'the_primordial', name: 'The Primordial', emoji: '🕳️', tier: 10, unlockLevel: 100,
+            desc: 'The first being. The last being. The Void itself made flesh.',
+            rewardType: 'gold', baseHp: 25000, baseDamage: 110, hpPerLevel: 300, dmgPerLevel: 4.0,
+            xpReward: 0, goldReward: 50000, regenPerMin: 220,
+            lootTable: [
+                { name: 'Primordial Dust', emoji: '🌫️', rarity: 'common', str: 10, wis: 10, hp: 50, weight: 50 },
+                { name: 'Genesis Fragment', emoji: '💠', rarity: 'uncommon', str: 18, wis: 18, hp: 65, weight: 30 },
+                { name: 'Primordial Fang', emoji: '🦷', rarity: 'rare', str: 30, wis: 25, hp: 120, weight: 15 },
+                { name: 'The First Flame', emoji: '🔥', rarity: 'epic', str: 40, wis: 40, hp: 200, weight: 4 },
+                { name: 'Primordial Heart', emoji: '💗', rarity: 'legendary', str: 60, wis: 60, hp: 400, weight: 1 }
+            ]
+        }
+    ];
+
+    let activeBossFight = null; // { bossId, bossCurrentHp, bossMaxHp }
+
+    function getBossMaxHp(boss) {
+        return boss.baseHp + (p.level * boss.hpPerLevel);
+    }
+
+    function getBossDamage(boss) {
+        return Math.floor(boss.baseDamage + (p.level * boss.dmgPerLevel));
+    }
+
+    function getPlayerBossData() {
+        if (!p.bossData) p.bossData = {};
+        return p.bossData;
+    }
+
+    function refreshBossUI() {
+        const list = document.getElementById('boss-list');
+        const fightArea = document.getElementById('boss-fight-area');
+        if (!list) return;
+
+        // If in active fight, show fight UI
+        if (activeBossFight) {
+            list.classList.add('hidden');
+            fightArea.classList.remove('hidden');
+            renderBossFight();
+            return;
+        }
+
+        list.classList.remove('hidden');
+        fightArea.classList.add('hidden');
+
+        const bossData = getPlayerBossData();
+        let html = '';
+
+        BOSS_DEFINITIONS.forEach(boss => {
+            const unlocked = p.level >= boss.unlockLevel;
+            const bd = bossData[boss.id] || {};
+            const defeated = bd.defeated || false;
+            const maxHp = getBossMaxHp(boss);
+
+            // Calculate current HP with regen
+            let currentHp = maxHp; // default full
+            if (bd.currentHp !== undefined && bd.currentHp < maxHp && !defeated) {
+                currentHp = bd.currentHp;
+                // Apply regen since last fight
+                if (bd.lastFightTime) {
+                    const minutesAway = (Date.now() - bd.lastFightTime) / 60000;
+                    currentHp = Math.min(maxHp, currentHp + Math.floor(minutesAway * boss.regenPerMin));
+                }
+            } else if (defeated) {
+                currentHp = 0;
+            }
+
+            const hpPercent = Math.max(0, (currentHp / maxHp) * 100);
+            const hpColor = defeated ? '#44ff44' : hpPercent > 50 ? '#ff4444' : hpPercent > 25 ? '#ff8800' : '#ffcc00';
+
+            html += `<div class="boss-card${unlocked ? '' : ' locked'}">`;
+            html += `<div class="boss-tier" style="background:${defeated ? 'rgba(0,100,0,0.5); color:#44ff44;' : 'rgba(139,0,0,0.5); color:#ff6666;'}">${defeated ? '✓ DEFEATED' : unlocked ? 'AVAILABLE' : `🔒 LV ${boss.unlockLevel}`}</div>`;
+            html += `<h3 style="margin:0 0 5px 0; color:${defeated ? '#44ff44' : 'var(--gold)'};">${boss.emoji} ${boss.name} <span style="color:#666; font-size:0.8rem;">Tier ${boss.tier}</span></h3>`;
+            html += `<p style="color:#888; font-size:0.85rem; margin:5px 0;">${boss.desc}</p>`;
+
+            if (unlocked) {
+                html += `<div class="boss-hp-bar"><div class="boss-hp-fill" style="width:${hpPercent}%; background:linear-gradient(90deg, ${hpColor}, ${defeated ? '#44ff44' : '#ff0000'});"></div>`;
+                html += `<div class="boss-hp-text">${defeated ? 'DEFEATED' : `${currentHp.toLocaleString()} / ${maxHp.toLocaleString()}`}</div></div>`;
+
+                html += `<div style="margin:8px 0;">`;
+                if (boss.rewardType === 'xp' || boss.xpReward > 0) html += `<span class="boss-reward-tag xp">+${boss.xpReward.toLocaleString()} XP</span>`;
+                if (boss.rewardType === 'gold' || boss.goldReward > 0) html += `<span class="boss-reward-tag gold">+${boss.goldReward.toLocaleString()} Gold</span>`;
+                html += `<span class="boss-reward-tag item">+ Trophy Loot</span>`;
+                html += `</div>`;
+
+                html += `<div style="font-size:0.8rem; color:#666; margin:5px 0;">Boss Damage: ~${getBossDamage(boss)} per hit</div>`;
+
+                if (!defeated) {
+                    html += `<button class="action-btn" onclick="startBossFight('${boss.id}')" style="background:#3a0000; border-color:#660000;">⚔ Challenge Boss</button>`;
+                } else {
+                    // Show earned trophies for this boss
+                    const trophies = (p.trophies || []).filter(t => t.fromBoss === boss.id);
+                    if (trophies.length > 0) {
+                        html += `<div style="margin-top:8px;"><span style="color:#888; font-size:0.8rem;">Trophies earned:</span><div class="trophy-grid">`;
+                        trophies.forEach(t => {
+                            html += `<div class="trophy-item rarity-${t.rarity}" title="+${t.str} STR, +${t.wis} WIS, +${t.hp} HP">${t.emoji} ${t.name}</div>`;
+                        });
+                        html += `</div></div>`;
+                    }
+                    html += `<button class="action-btn" onclick="rechallengeBoss('${boss.id}')" style="background:#1a1a2a; border-color:#333;">🔄 Challenge Again (Farm Loot)</button>`;
+                }
+            }
+
+            html += `</div>`;
+        });
+
+        list.innerHTML = html;
+    }
+
+    function startBossFight(bossId) {
+        const boss = BOSS_DEFINITIONS.find(b => b.id === bossId);
+        if (!boss || p.level < boss.unlockLevel) return;
+
+        if (p.hp <= 0) {
+            showToast('error', 'Too Weak', 'You must rest before challenging a boss', 'Go to The Frontier and rest');
+            return;
+        }
+
+        const bossData = getPlayerBossData();
+        const bd = bossData[bossId] || {};
+        const maxHp = getBossMaxHp(boss);
+
+        let currentHp = maxHp;
+        if (bd.currentHp !== undefined && bd.currentHp > 0) {
+            currentHp = bd.currentHp;
+            // Apply regen
+            if (bd.lastFightTime) {
+                const minutesAway = (Date.now() - bd.lastFightTime) / 60000;
+                currentHp = Math.min(maxHp, currentHp + Math.floor(minutesAway * boss.regenPerMin));
+            }
+        }
+
+        activeBossFight = {
+            bossId: bossId,
+            bossCurrentHp: currentHp,
+            bossMaxHp: maxHp
+        };
+
+        refreshBossUI();
+    }
+
+    function rechallengeBoss(bossId) {
+        const boss = BOSS_DEFINITIONS.find(b => b.id === bossId);
+        if (!boss) return;
+
+        if (p.hp <= 0) {
+            showToast('error', 'Too Weak', 'You must rest before challenging a boss', 'Go to The Frontier and rest');
+            return;
+        }
+
+        // Reset boss for rechallenge
+        const bossData = getPlayerBossData();
+        const maxHp = getBossMaxHp(boss);
+        bossData[bossId] = { currentHp: maxHp, lastFightTime: null, defeated: false };
+
+        activeBossFight = {
+            bossId: bossId,
+            bossCurrentHp: maxHp,
+            bossMaxHp: maxHp
+        };
+
+        gameAction(() => { markDirty(); });
+        refreshBossUI();
+    }
+
+    function renderBossFight() {
+        const fightArea = document.getElementById('boss-fight-area');
+        if (!fightArea || !activeBossFight) return;
+
+        const boss = BOSS_DEFINITIONS.find(b => b.id === activeBossFight.bossId);
+        if (!boss) return;
+
+        const hpPercent = Math.max(0, (activeBossFight.bossCurrentHp / activeBossFight.bossMaxHp) * 100);
+        const hpColor = hpPercent > 50 ? '#ff4444' : hpPercent > 25 ? '#ff8800' : '#ffcc00';
+        const playerHpPercent = Math.max(0, (p.hp / p.maxHp) * 100);
+        const playerHpColor = playerHpPercent > 50 ? '#44ff44' : playerHpPercent > 25 ? '#ffaa00' : '#ff4444';
+        const bossDmg = getBossDamage(boss);
+
+        let html = `<div style="border:2px solid var(--accent); padding:20px; background:#0a0a0a;">`;
+        html += `<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">`;
+        html += `<h3 style="margin:0; color:var(--gold);">${boss.emoji} ${boss.name}</h3>`;
+        html += `<button class="action-btn" onclick="fleeBossFight()" style="background:#333; font-size:0.8rem;">🚪 Flee</button>`;
+        html += `</div>`;
+
+        // Boss HP bar
+        html += `<div style="margin-top:12px;"><span style="color:#ff6666; font-size:0.8rem;">BOSS HP</span>`;
+        html += `<div class="boss-hp-bar"><div class="boss-hp-fill" style="width:${hpPercent}%; background:linear-gradient(90deg, ${hpColor}, #ff0000);"></div>`;
+        html += `<div class="boss-hp-text">${activeBossFight.bossCurrentHp.toLocaleString()} / ${activeBossFight.bossMaxHp.toLocaleString()}</div></div></div>`;
+
+        // Player HP bar
+        html += `<div style="margin-top:8px;"><span style="color:#44ff44; font-size:0.8rem;">YOUR HP</span>`;
+        html += `<div class="boss-hp-bar"><div class="boss-hp-fill" style="width:${playerHpPercent}%; background:linear-gradient(90deg, #1a5a1a, ${playerHpColor});"></div>`;
+        html += `<div class="boss-hp-text">${p.hp} / ${p.maxHp}</div></div></div>`;
+
+        // Boss info
+        html += `<div style="margin:12px 0; color:#888; font-size:0.85rem;">Boss hits you for ~${bossDmg} per attack · Your STR: ${p.str} · <span style="color:#ff4444;">No resting allowed</span></div>`;
+
+        if (p.hp <= 0) {
+            html += `<div style="padding:15px; text-align:center; color:#ff4444; border:1px solid #ff4444; margin:10px 0;">`;
+            html += `<strong>You have fallen!</strong><br>Return to The Frontier to rest, then come back.`;
+            html += `</div>`;
+            html += `<button class="action-btn" onclick="fleeBossFight()" style="width:100%;">Return to Boss List</button>`;
+        } else {
+            html += `<button class="action-btn" onclick="attackBoss()" style="background:#3a0000; border-color:#660000; width:100%; padding:15px; font-size:1rem;">⚔ ATTACK</button>`;
+        }
+
+        // Fight log
+        html += `<div id="boss-log" style="max-height:150px; overflow-y:auto; margin-top:15px; border-top:1px solid #222; padding-top:10px; font-size:0.85rem; color:#888;"></div>`;
+
+        html += `</div>`;
+        fightArea.innerHTML = html;
+    }
+
+    function attackBoss() {
+        if (!activeBossFight || p.hp <= 0) return;
+
+        const boss = BOSS_DEFINITIONS.find(b => b.id === activeBossFight.bossId);
+        if (!boss) return;
+
+        gameAction(() => {
+            // Player attacks boss
+            const playerDamage = Math.floor(p.str * (1.5 + Math.random() * 0.5));
+            activeBossFight.bossCurrentHp = Math.max(0, activeBossFight.bossCurrentHp - playerDamage);
+
+            // Boss attacks player (no rest!)
+            const bossDmg = getBossDamage(boss);
+            const actualBossDmg = Math.floor(bossDmg * (0.8 + Math.random() * 0.4));
+            p.hp = Math.max(0, p.hp - actualBossDmg);
+
+            // Save boss state
+            const bossData = getPlayerBossData();
+            if (!bossData[boss.id]) bossData[boss.id] = {};
+            bossData[boss.id].currentHp = activeBossFight.bossCurrentHp;
+            bossData[boss.id].lastFightTime = Date.now();
+
+            // Check if boss is dead
+            if (activeBossFight.bossCurrentHp <= 0) {
+                bossData[boss.id].defeated = true;
+                bossData[boss.id].currentHp = 0;
+                bossDefeated(boss);
+                return;
+            }
+
+            // Check if player is dead
+            if (p.hp <= 0) {
+                p.hp = 0;
+                const goldLost = p.gold;
+                p.gold = 0;
+                addLog(`<span style="color:#ff4444;">☠ You fell fighting ${boss.name}! Lost ${goldLost} gold.</span>`);
+            }
+
+            refreshUI();
+            markDirty();
+        });
+
+        renderBossFight();
+
+        // Add to boss fight log
+        const bossLog = document.getElementById('boss-log');
+        if (bossLog) {
+            bossLog.scrollTop = bossLog.scrollHeight;
+        }
+    }
+
+    function bossDefeated(boss) {
+        // Roll for loot
+        const loot = rollBossLoot(boss);
+
+        gameAction(() => {
+            // Apply rewards — XP and gold only granted on kill
+            if (boss.xpReward > 0) p.xp += boss.xpReward;
+            if (boss.goldReward > 0) p.gold += boss.goldReward;
+
+            // Apply trophy stats
+            if (!p.trophies) p.trophies = [];
+            p.trophies.push({
+                name: loot.name,
+                emoji: loot.emoji,
+                rarity: loot.rarity,
+                str: loot.str,
+                wis: loot.wis,
+                hp: loot.hp,
+                fromBoss: boss.id,
+                earnedAt: Date.now()
+            });
+
+            // Apply permanent stat boosts from trophy
+            p.str += loot.str;
+            p.wis += loot.wis;
+            p.maxHp += loot.hp;
+            p.hp = Math.min(p.hp + loot.hp, p.maxHp);
+
+            // Check level ups
+            while (p.xp >= p.level * 100) {
+                p.xp -= p.level * 100;
+                p.level++;
+                p.maxHp += 20;
+                p.hp = p.maxHp;
+                p.str += 2;
+                p.wis += 2;
+                addLog(`<span style="color:#4af; font-weight:bold;">LEVEL UP! You are now level ${p.level}. HP fully restored!</span>`);
+            }
+
+            refreshUI();
+            markDirty();
+        });
+
+        // Build reward text
+        let rewardText = '';
+        if (boss.xpReward > 0) rewardText += `+${boss.xpReward.toLocaleString()} XP `;
+        if (boss.goldReward > 0) rewardText += `+${boss.goldReward.toLocaleString()} Gold `;
+
+        const rarityColors = { common:'#aaa', uncommon:'#44ff44', rare:'#4488ff', epic:'#aa44ff', legendary:'#ff8800' };
+        const rarityColor = rarityColors[loot.rarity] || '#aaa';
+
+        showToast('victory', `🏆 ${boss.name} Defeated!`,
+            `${rewardText}`,
+            `<span style="color:${rarityColor};">${loot.emoji} ${loot.name} [${loot.rarity.toUpperCase()}]</span><br>+${loot.str} STR, +${loot.wis} WIS, +${loot.hp} HP`
+        );
+
+        addLog(`<span style="color:var(--gold); font-weight:bold;">🏆 You defeated ${boss.name}! Earned: ${loot.emoji} ${loot.name} (${loot.rarity})</span>`);
+        sendSystemChat(`🏆 ${p.displayName || currentUser} has slain ${boss.name} and claimed ${loot.emoji} ${loot.name}!`);
+
+        activeBossFight = null;
+        refreshBossUI();
+    }
+
+    function rollBossLoot(boss) {
+        const table = boss.lootTable;
+        const totalWeight = table.reduce((sum, item) => sum + item.weight, 0);
+        let roll = Math.random() * totalWeight;
+
+        for (const item of table) {
+            roll -= item.weight;
+            if (roll <= 0) return { ...item };
+        }
+        return { ...table[0] };
+    }
+
+    function fleeBossFight() {
+        if (!activeBossFight) return;
+
+        // Save current boss HP state
+        const boss = BOSS_DEFINITIONS.find(b => b.id === activeBossFight.bossId);
+        if (boss) {
+            const bossData = getPlayerBossData();
+            if (!bossData[boss.id]) bossData[boss.id] = {};
+            bossData[boss.id].currentHp = activeBossFight.bossCurrentHp;
+            bossData[boss.id].lastFightTime = Date.now();
+            gameAction(() => { markDirty(); });
+        }
+
+        activeBossFight = null;
+        refreshBossUI();
+    }
+
+    // Render trophies in player profile/card
+    function renderTrophies(trophies) {
+        if (!trophies || trophies.length === 0) return '';
+
+        let html = '<div style="margin-top:15px;"><h4 style="color:var(--gold); margin-bottom:8px;">🏆 Boss Trophies</h4>';
+        html += '<div class="trophy-grid">';
+
+        const rarityOrder = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
+        const sorted = [...trophies].sort((a, b) => (rarityOrder[a.rarity] || 5) - (rarityOrder[b.rarity] || 5));
+
+        sorted.forEach(t => {
+            html += `<div class="trophy-item rarity-${t.rarity}" title="+${t.str} STR, +${t.wis} WIS, +${t.hp} HP · From: ${t.fromBoss}">`;
+            html += `${t.emoji} ${t.name} <span style="font-size:0.7rem; opacity:0.7;">[${t.rarity}]</span>`;
+            html += `</div>`;
+        });
+
+        html += '</div></div>';
+        return html;
+    }
     // ============================================
     // INITIALIZATION
     // ============================================
