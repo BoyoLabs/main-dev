@@ -141,17 +141,13 @@
             <button class="action-btn" style="width:100%; margin: 10px 0 0 0;" onclick="doRegister()">Create Character</button>
         </div>
 
-        <div class="auth-divider"><span>REALM</span></div>
-
-        <div class="auth-field">
-            <input type="text" id="realm-name" value="void-realm-default" placeholder="Realm name" style="text-align:center; font-family: monospace; color: var(--gold); border-color: #444;">
-        </div>
-        <div class="realm-info">All players in the same realm share the same cloud database.</div>
+        <div class="auth-divider"><span>VOID-SLAYER</span></div>
+        <input type="hidden" id="realm-name" value="void-realm-default">
 
         <div class="debug" id="connection-status">Initializing...</div>
         <div class="debug" id="auth-debug" style="margin-top: 8px; max-height: 80px; overflow-y: auto;"></div>
         <div style="margin-top: 10px;">
-            <span class="debug" style="cursor:pointer; color:#664444; border-bottom:1px dotted #664444;" onclick="if(confirm('Clear all local data for this realm? You will need to register again.')){const r=document.getElementById('realm-name').value.trim()||'void-realm-default';localStorage.removeItem('void-accounts-'+r);localStorage.removeItem('void-gamestate-'+r);document.getElementById('auth-debug').innerText='Local data cleared.';document.getElementById('auth-error').innerText='';}">Clear local data</span>
+            <span class="debug" style="cursor:pointer; color:#664444; border-bottom:1px dotted #664444;" onclick="if(confirm('Clear all local data? You will need to register again.')){localStorage.removeItem('void-accounts-void-realm-default');localStorage.removeItem('void-gamestate-void-realm-default');document.getElementById('auth-debug').innerText='Local data cleared.';document.getElementById('auth-error').innerText='';}">Clear local data</span>
         </div>
     </div>
 </div>
@@ -169,7 +165,7 @@
     <div class="nav-link" onclick="goTab('chat'); displayChat();">Tavern</div>
     <div class="nav-link" onclick="goTab('profile')">Profile</div>
     <div class="nav-link" onclick="goTab('news'); refreshNews();">News</div>
-    <div id="nav-backup" class="nav-link hidden" onclick="goTab('backup'); refreshBackupInfo();" style="color:var(--admin);">🔒 Backup</div>
+    <div id="nav-admin" class="nav-link hidden" onclick="goTab('admin'); refreshAdminConsole();" style="color:var(--admin);">🔒 Admin Console</div>
     <div class="debug" style="margin-top: auto; padding-top: 20px;">
         <span id="player-count">0</span> players online<br>
         <span id="cloud-status" style="color: #888;">Cloud: Idle</span>
@@ -208,6 +204,7 @@
         <div id="tab-lead" class="hidden">
             <div class="card">
                 <h2>Leaderboard</h2>
+                <input type="text" id="lead-search" placeholder="Search players..." style="width:100%; max-width:300px; margin-bottom:15px;" oninput="loadLeaderboard()">
                 <div id="leaderboard-list" style="font-family:monospace; font-size:0.9rem;"></div>
             </div>
         </div>
@@ -338,21 +335,42 @@
             </div>
         </div>
 
-        <!-- BACKUP TAB (Admin Only) -->
-        <div id="tab-backup" class="hidden">
+        <!-- ADMIN CONSOLE TAB (Admin Only) -->
+        <div id="tab-admin" class="hidden">
             <div class="card">
-                <h2 style="color:var(--admin)">🔒 Admin Backup Panel</h2>
-                <p style="color:#888;">Download or restore the entire realm state.</p>
+                <h2 style="color:var(--admin)">🔒 Admin Console</h2>
+                <div id="admin-info" style="margin:15px 0; padding:15px; background:#0a0a0a; border:1px solid #222; font-family:monospace; font-size:0.85rem;"></div>
                 
-                <div id="backup-info" style="margin:15px 0; padding:15px; background:#0a0a0a; border:1px solid #222; font-family:monospace; font-size:0.85rem;"></div>
+                <div style="margin-top:20px;">
+                    <h3 style="color:var(--admin); margin-bottom:10px;">Player Management</h3>
+                    <input type="text" id="admin-player-search" placeholder="Search players..." style="width:100%; max-width:300px; margin-bottom:10px;" oninput="refreshAdminPlayerList()">
+                    <div id="admin-player-list" style="max-height:300px; overflow-y:auto;"></div>
+                </div>
                 
-                <button class="action-btn" onclick="downloadBackup()" style="background:var(--admin); border-color:var(--admin);">⬇ Download Backup</button>
-                <label class="action-btn" style="display:inline-block; cursor:pointer;">
-                    ⬆ Upload Backup
-                    <input type="file" accept=".json" onchange="uploadBackup(event)" style="display:none;">
-                </label>
+                <div style="margin-top:30px; border-top:1px solid #222; padding-top:20px;">
+                    <h3 style="color:var(--admin); margin-bottom:10px;">Server Actions</h3>
+                    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                        <button class="action-btn" onclick="adminResetStats()" style="background:#3a0000; border-color:#660000;">🔄 Reset All Stats</button>
+                        <button class="action-btn" onclick="adminFullReset()" style="background:#3a0000; border-color:#660000;">💣 Full Server Reset</button>
+                        <button class="action-btn" onclick="adminClearChat()" style="background:#222;">🧹 Clear All Chat</button>
+                        <button class="action-btn" onclick="adminClearNews()" style="background:#222;">📰 Clear All News</button>
+                        <button class="action-btn" onclick="adminClearWars()" style="background:#222;">⚔ Clear War History</button>
+                        <button class="action-btn" onclick="adminGiveGold()" style="background:#2a2a00; border-color:#444400;">💰 Give Gold</button>
+                    </div>
+                    <div id="admin-action-status" style="margin-top:10px; font-size:0.85rem; color:#888;"></div>
+                </div>
                 
-                <div id="backup-status" style="margin-top:15px; font-size:0.9rem; color:#888;"></div>
+                <div style="margin-top:30px; border-top:1px solid #222; padding-top:20px;">
+                    <h3 style="color:var(--admin); margin-bottom:10px;">Backup</h3>
+                    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                        <button class="action-btn" onclick="downloadBackup()" style="background:var(--admin); border-color:var(--admin);">⬇ Download Backup</button>
+                        <label class="action-btn" style="display:inline-block; cursor:pointer;">
+                            ⬆ Upload Backup
+                            <input type="file" accept=".json" onchange="uploadBackup(event)" style="display:none;">
+                        </label>
+                    </div>
+                    <div id="backup-status" style="margin-top:10px; font-size:0.85rem; color:#888;"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -723,6 +741,14 @@
             }
         
             authDebug('Password OK, logging in as ' + username);
+            
+            // Check if banned
+            if (gameState.players[username] && gameState.players[username].banned) {
+                errorDiv.innerText = 'This account has been banned from the realm.';
+                authDebug('<span style="color:#ff4444">Account "' + username + '" is banned</span>');
+                return;
+            }
+            
             currentUser = username;
         
             if (!gameState.players[username]) {
@@ -761,7 +787,7 @@
             updatePlayerCount();
         
             if (username === ADMIN) {
-                document.getElementById('nav-backup').classList.remove('hidden');
+                document.getElementById('nav-admin').classList.remove('hidden');
             }
         
             addLog(`<span style="color:var(--gold)">Welcome, ${username}.</span>`);
@@ -1028,9 +1054,19 @@
         const list = document.getElementById('leaderboard-list');
         if (!list) return;
         
-        const players = Object.entries(gameState.players)
-            .sort((a, b) => b[1].level - a[1].level || b[1].xp - a[1].xp)
-            .slice(0, 20);
+        const searchTerm = (document.getElementById('lead-search')?.value || '').trim().toLowerCase();
+        
+        let players = Object.entries(gameState.players)
+            .sort((a, b) => b[1].level - a[1].level || b[1].xp - a[1].xp);
+        
+        if (searchTerm) {
+            players = players.filter(([name, data]) => {
+                const displayName = (data.displayName || name).toLowerCase();
+                return name.toLowerCase().includes(searchTerm) || displayName.includes(searchTerm);
+            });
+        }
+        
+        players = players.slice(0, 30);
         
         if (players.length === 0) {
             list.innerHTML = '<p style="color:#666;">No players yet.</p>';
@@ -1162,9 +1198,19 @@
         const container = document.getElementById('pvp-targets');
         if (!container) return;
         
+        const myPowerBase = p.level * 10 + p.str * 5;
+        
         const targets = Object.entries(gameState.players)
             .filter(([name]) => name !== currentUser)
-            .sort((a, b) => b[1].level - a[1].level);
+            .sort((a, b) => {
+                const aPower = a[1].level * 10 + a[1].str * 5;
+                const bPower = b[1].level * 10 + b[1].str * 5;
+                const aWin = myPowerBase / (myPowerBase + aPower);
+                const bWin = myPowerBase / (myPowerBase + bPower);
+                const aScore = aWin * (a[1].gold || 0);
+                const bScore = bWin * (b[1].gold || 0);
+                return bScore - aScore;
+            });
         
         if (targets.length === 0) {
             container.innerHTML = '<p style="color:#666;">No other players available.</p>';
@@ -1262,14 +1308,25 @@
         const container = document.getElementById('guild-content');
         if (!container) return;
         
+        // Build guild search (always shown)
+        let searchHtml = '<div style="margin-bottom:15px;">';
+        searchHtml += '<input type="text" id="guild-search" placeholder="Search guilds..." style="width:100%; max-width:300px;" oninput="refreshGuildUI()">';
+        searchHtml += '</div>';
+        
+        const guildSearchTerm = (document.getElementById('guild-search')?.value || '').trim().toLowerCase();
+        
         if (!p.guild) {
-            let html = '<h3>You are not in a guild.</h3>';
+            let html = searchHtml;
+            html += '<h3>You are not in a guild.</h3>';
             html += '<button class="action-btn" onclick="showCreateGuild()">Create Guild (500 Gold)</button>';
             html += '<div style="margin-top:20px;"><h4>Existing Guilds</h4>';
             
-            const guilds = Object.entries(gameState.guilds);
+            let guilds = Object.entries(gameState.guilds);
+            if (guildSearchTerm) {
+                guilds = guilds.filter(([id, g]) => g.name.toLowerCase().includes(guildSearchTerm) || g.tag.toLowerCase().includes(guildSearchTerm) || (g.blurb || '').toLowerCase().includes(guildSearchTerm));
+            }
             if (guilds.length === 0) {
-                html += '<p style="color:#666;">No guilds exist yet.</p>';
+                html += '<p style="color:#666;">No guilds found.</p>';
             } else {
                 guilds.forEach(([id, guild]) => {
                     const isFull = guild.members.length >= 10;
@@ -1299,7 +1356,8 @@
             
             const isLeader = guild.leader === currentUser;
             
-            let html = `<h3 style="color:#4af;">【${guild.tag}】${guild.name}</h3>`;
+            let html = searchHtml;
+            html += `<h3 style="color:#4af;">【${guild.tag}】${guild.name}</h3>`;
             html += `<p>Leader: ${guild.leader}</p>`;
             
             // Show blurb
@@ -1345,11 +1403,26 @@
             
             html += '<button class="action-btn" onclick="leaveGuild()">Leave Guild</button>';
             
-            // Show other guilds
-            const otherGuilds = Object.entries(gameState.guilds).filter(([id]) => id !== p.guild);
-            if (otherGuilds.length > 0) {
+            // Guild Chat
+            html += '<div style="margin-top:30px; border-top:1px solid #222; padding-top:15px;">';
+            html += '<h4 style="color:#4af;">Guild Chat</h4>';
+            html += '<div id="guild-chat-log" style="height:200px; overflow-y:auto; border:1px solid #333; padding:10px; margin-bottom:10px; font-size:0.9rem;"></div>';
+            html += '<div style="display:flex; gap:5px;">';
+            html += '<input type="text" id="guild-chat-in" placeholder="Message your guild..." style="flex:1; width:auto;" onkeypress="if(event.key===\'Enter\')sendGuildChat()">';
+            html += '<button class="action-btn" onclick="sendGuildChat()">Send</button>';
+            html += '</div></div>';
+            
+            // Show other guilds (with search)
+            let otherGuilds = Object.entries(gameState.guilds).filter(([id]) => id !== p.guild);
+            if (guildSearchTerm) {
+                otherGuilds = otherGuilds.filter(([id, g]) => g.name.toLowerCase().includes(guildSearchTerm) || g.tag.toLowerCase().includes(guildSearchTerm) || (g.blurb || '').toLowerCase().includes(guildSearchTerm));
+            }
+            if (otherGuilds.length > 0 || guildSearchTerm) {
                 html += '<div style="margin-top:30px; border-top:1px solid #222; padding-top:15px;">';
                 html += '<h4 style="color:#888;">Other Guilds</h4>';
+                if (otherGuilds.length === 0) {
+                    html += '<p style="color:#666;">No guilds match your search.</p>';
+                }
                 otherGuilds.forEach(([id, g]) => {
                     html += `<div style="border:1px solid #222; padding:10px; margin-bottom:5px;">`;
                     html += `<strong style="color:#4af;">【${g.tag}】${g.name}</strong> - ${g.members.length}/10 members`;
@@ -1362,6 +1435,7 @@
             }
             
             container.innerHTML = html;
+            displayGuildChat();
         }
     }
 
@@ -1917,25 +1991,312 @@
     }
 
     // ============================================
-    // BACKUP SYSTEM (Admin Only)
+    // GUILD CHAT
     // ============================================
-    function refreshBackupInfo() {
-        if (currentUser !== ADMIN) return;
+    function sendGuildChat() {
+        if (!p.guild) return;
+        const guild = gameState.guilds[p.guild];
+        if (!guild) return;
         
-        const info = document.getElementById('backup-info');
-        if (!info) return;
-        const playerCount = Object.keys(gameState.players).length;
-        const accountCount = Object.keys(getAccounts()).length;
-        const guildCount = Object.keys(gameState.guilds || {}).length;
-        const warCount = (gameState.wars || []).length;
-        const newsCount = (gameState.news || []).length;
-        const chatCount = (gameState.chat || []).length;
+        const input = document.getElementById('guild-chat-in');
+        const msg = input.value.trim();
+        if (!msg) return;
         
-        info.innerHTML = `Players: ${playerCount} · Accounts: ${accountCount} · Guilds: ${guildCount}<br>` +
-            `Wars: ${warCount} · News: ${newsCount} · Chat msgs: ${chatCount}<br>` +
-            `Gate: ${gameState.gate || 'CLOSED'}`;
+        if (!guild.chat) guild.chat = [];
+        
+        guild.chat.push({
+            user: currentUser,
+            text: msg,
+            time: Date.now()
+        });
+        
+        // Keep last 100 messages
+        if (guild.chat.length > 100) guild.chat.shift();
+        
+        input.value = '';
+        displayGuildChat();
+        markDirty();
+    }
+    
+    function displayGuildChat() {
+        const log = document.getElementById('guild-chat-log');
+        if (!log || !p.guild) return;
+        
+        const guild = gameState.guilds[p.guild];
+        if (!guild) return;
+        
+        const messages = guild.chat || [];
+        log.innerHTML = '';
+        
+        messages.slice(-50).forEach(msg => {
+            const div = document.createElement('div');
+            div.style.marginBottom = '5px';
+            const userColor = msg.user === currentUser ? 'var(--gold)' : '#4af';
+            const playerData = gameState.players[msg.user];
+            const displayName = playerData?.displayName || msg.user;
+            div.innerHTML = `<strong style="color:${userColor};">${displayName}:</strong> ${msg.text}`;
+            log.appendChild(div);
+        });
+        
+        log.scrollTop = log.scrollHeight;
     }
 
+    // ============================================
+    // ADMIN CONSOLE (Replaces Backup)
+    // ============================================
+    function refreshAdminConsole() {
+        if (currentUser !== ADMIN) return;
+        
+        const info = document.getElementById('admin-info');
+        if (info) {
+            const playerCount = Object.keys(gameState.players).length;
+            const accountCount = Object.keys(getAccounts()).length;
+            const guildCount = Object.keys(gameState.guilds || {}).length;
+            const warCount = (gameState.wars || []).length;
+            const newsCount = (gameState.news || []).length;
+            const chatCount = (gameState.chat || []).length;
+            const bannedCount = Object.values(gameState.players).filter(pl => pl.banned).length;
+            
+            info.innerHTML = `Players: ${playerCount} · Accounts: ${accountCount} · Guilds: ${guildCount}<br>` +
+                `Wars: ${warCount} · News: ${newsCount} · Chat msgs: ${chatCount}<br>` +
+                `Banned: ${bannedCount}`;
+        }
+        
+        refreshAdminPlayerList();
+    }
+    
+    function refreshAdminPlayerList() {
+        if (currentUser !== ADMIN) return;
+        const container = document.getElementById('admin-player-list');
+        if (!container) return;
+        
+        const searchTerm = (document.getElementById('admin-player-search')?.value || '').trim().toLowerCase();
+        
+        let players = Object.entries(gameState.players);
+        if (searchTerm) {
+            players = players.filter(([name, data]) => {
+                const displayName = (data.displayName || name).toLowerCase();
+                return name.toLowerCase().includes(searchTerm) || displayName.includes(searchTerm);
+            });
+        }
+        
+        players.sort((a, b) => b[1].level - a[1].level);
+        
+        if (players.length === 0) {
+            container.innerHTML = '<p style="color:#666;">No players found.</p>';
+            return;
+        }
+        
+        let html = '';
+        players.forEach(([name, data]) => {
+            const displayName = data.displayName || name;
+            const avatar = data.avatar || '⚔️';
+            const isBanned = data.banned;
+            const isAdmin = name === ADMIN;
+            
+            html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid #222;${isBanned ? ' opacity:0.5; background:#1a0000;' : ''}">`;
+            html += `<span>${avatar} <span class="name-link" onclick="showPlayerCard('${name}')">${displayName}</span> <span style="color:#666; font-size:0.8rem;">(${name}) Lv${data.level} ⚜${data.gold || 0}</span>`;
+            if (isBanned) html += ` <span style="color:#ff4444; font-size:0.75rem;">BANNED</span>`;
+            html += `</span>`;
+            
+            if (!isAdmin) {
+                html += `<span style="display:flex; gap:4px;">`;
+                if (isBanned) {
+                    html += `<button class="action-btn" onclick="adminUnbanPlayer('${name}')" style="font-size:0.7rem; padding:4px 8px; background:#1a3a1a;">Unban</button>`;
+                } else {
+                    html += `<button class="action-btn" onclick="adminBanPlayer('${name}')" style="font-size:0.7rem; padding:4px 8px; background:#3a3a00;">Ban</button>`;
+                }
+                html += `<button class="action-btn" onclick="adminDeletePlayer('${name}')" style="font-size:0.7rem; padding:4px 8px; background:#3a0000;">Delete</button>`;
+                html += `</span>`;
+            }
+            html += `</div>`;
+        });
+        
+        container.innerHTML = html;
+    }
+    
+    function adminBanPlayer(username) {
+        if (currentUser !== ADMIN || username === ADMIN) return;
+        if (!confirm(`Ban ${username}? They will not be able to log in.`)) return;
+        
+        if (gameState.players[username]) {
+            gameState.players[username].banned = true;
+            gameState.players[username].online = false;
+        }
+        
+        markDirty();
+        refreshAdminConsole();
+        showToast('error', '🚫 Banned', username, '');
+        sendSystemChat(`🚫 ${username} has been banished from the realm.`);
+    }
+    
+    function adminUnbanPlayer(username) {
+        if (currentUser !== ADMIN) return;
+        if (gameState.players[username]) {
+            delete gameState.players[username].banned;
+        }
+        markDirty();
+        refreshAdminConsole();
+        showToast('purchase', '✓ Unbanned', username, '');
+    }
+    
+    function adminDeletePlayer(username) {
+        if (currentUser !== ADMIN || username === ADMIN) return;
+        if (!confirm(`Permanently delete ${username}? This removes their player data AND account.`)) return;
+        if (!confirm(`Are you SURE? This cannot be undone.`)) return;
+        
+        // Remove from guild
+        const playerGuild = gameState.players[username]?.guild;
+        if (playerGuild && gameState.guilds[playerGuild]) {
+            const guild = gameState.guilds[playerGuild];
+            guild.members = guild.members.filter(m => m !== username);
+            if (guild.leader === username) {
+                if (guild.members.length > 0) {
+                    guild.leader = guild.members[0];
+                } else {
+                    delete gameState.guilds[playerGuild];
+                }
+            }
+        }
+        
+        // Remove player data
+        delete gameState.players[username];
+        
+        // Remove account
+        const accounts = getAccounts();
+        delete accounts[username];
+        saveAccounts(accounts);
+        
+        markDirty();
+        refreshAdminConsole();
+        showToast('error', '🗑 Deleted', username, 'Account and data removed');
+        addLog(`<span style='color:var(--admin)'>Deleted player: ${username}</span>`);
+    }
+    
+    function adminResetStats() {
+        if (currentUser !== ADMIN) return;
+        if (!confirm('Reset ALL player stats? This keeps accounts but resets levels, gold, kills, etc. to fresh.')) return;
+        if (!confirm('This will reset EVERY player. Are you sure?')) return;
+        
+        Object.keys(gameState.players).forEach(name => {
+            const pl = gameState.players[name];
+            const accounts = getAccounts();
+            const race = accounts[name]?.race || pl.race || 'Hollow';
+            
+            gameState.players[name] = {
+                race: race,
+                level: 1,
+                xp: 0,
+                hp: 100,
+                maxHp: 100,
+                str: race === 'Hollow' ? 11 : 10,
+                wis: race === 'Wraith' ? 11 : 10,
+                gold: 0,
+                guild: null,
+                kills: 0,
+                deaths: 0,
+                online: pl.online,
+                lastSeen: pl.lastSeen,
+                createdAt: Date.now(),
+                displayName: pl.displayName,
+                avatar: pl.avatar,
+                bio: pl.bio
+            };
+        });
+        
+        // Clear guilds and wars
+        gameState.guilds = {};
+        gameState.wars = [];
+        
+        // Reset current player ref
+        p = gameState.players[currentUser];
+        refreshUI();
+        markDirty();
+        refreshAdminConsole();
+        
+        showToast('purchase', '🔄 Stats Reset', 'All player stats reset to fresh', '');
+        sendSystemChat('🔄 The Void Master has reset all player stats!');
+    }
+    
+    function adminFullReset() {
+        if (currentUser !== ADMIN) return;
+        if (!confirm('⚠ FULL SERVER RESET ⚠\n\nThis will delete ALL data: players, guilds, wars, chat, news.\nOnly accounts will be preserved.\n\nAre you absolutely sure?')) return;
+        if (!confirm('LAST CHANCE: This cannot be undone. Proceed?')) return;
+        
+        gameState.players = {};
+        gameState.guilds = {};
+        gameState.wars = [];
+        gameState.news = [];
+        gameState.chat = [];
+        gameState.gate = 'CLOSED';
+        
+        // Recreate admin player
+        const accounts = getAccounts();
+        const adminRace = accounts[ADMIN]?.race || 'Hollow';
+        gameState.players[ADMIN] = {
+            race: adminRace,
+            level: 1, xp: 0, hp: 100, maxHp: 100,
+            str: adminRace === 'Hollow' ? 11 : 10,
+            wis: adminRace === 'Wraith' ? 11 : 10,
+            gold: 0, guild: null, kills: 0, deaths: 0,
+            online: true, lastSeen: Date.now(), createdAt: Date.now()
+        };
+        
+        p = gameState.players[ADMIN];
+        refreshUI();
+        markDirty();
+        refreshAdminConsole();
+        
+        showToast('error', '💣 Full Reset', 'Server data wiped', '');
+        addLog("<span style='color:var(--admin)'>Full server reset completed.</span>");
+    }
+    
+    function adminClearChat() {
+        if (currentUser !== ADMIN) return;
+        if (!confirm('Clear all tavern chat messages?')) return;
+        gameState.chat = [];
+        markDirty();
+        showToast('purchase', '✓ Chat Cleared', '', '');
+    }
+    
+    function adminClearNews() {
+        if (currentUser !== ADMIN) return;
+        if (!confirm('Clear all news?')) return;
+        gameState.news = [];
+        markDirty();
+        showToast('purchase', '✓ News Cleared', '', '');
+    }
+    
+    function adminClearWars() {
+        if (currentUser !== ADMIN) return;
+        if (!confirm('Clear all war history? Active wars will also be removed.')) return;
+        gameState.wars = [];
+        markDirty();
+        showToast('purchase', '✓ Wars Cleared', '', '');
+    }
+    
+    function adminGiveGold() {
+        if (currentUser !== ADMIN) return;
+        const target = prompt('Username to give gold to:');
+        if (!target || !gameState.players[target]) {
+            alert('Player not found.');
+            return;
+        }
+        const amount = parseInt(prompt('Amount of gold:'));
+        if (isNaN(amount) || amount <= 0) {
+            alert('Invalid amount.');
+            return;
+        }
+        gameState.players[target].gold += amount;
+        markDirty();
+        refreshAdminConsole();
+        showToast('purchase', '💰 Gold Given', `${amount} gold to ${target}`, '');
+        addLog(`<span style='color:var(--admin)'>Gave ${amount} gold to ${target}</span>`);
+    }
+
+    // ============================================
+    // BACKUP FUNCTIONS (used by admin console)
+    // ============================================
     function downloadBackup() {
         if (currentUser !== ADMIN) return;
 
@@ -2043,7 +2404,7 @@
                 addLog("<span style='color:var(--admin)'>Realm backup restored!</span>");
                 sendSystemChat("🔄 The Void Master has restored the realm from a backup!");
 
-                refreshBackupInfo();
+                refreshAdminConsole();
             } catch (err) {
                 status.style.color = '#ff4444';
                 status.innerText = '❌ Error reading backup: ' + err.message;
