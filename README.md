@@ -6,6 +6,10 @@ This repo is dedicated to my single page web apps, programming and other scripti
 
 ## APPS LIST
 
+### PositionalPro.html
+* 1+0 bullet trainer
+* github.io link:  https://boyolabs.github.io/main-dev/PositionalPro.html
+
 ### void-slayer.html (CURRENT STATUS: OPEN BETA)
 * Browser and text based MMORPG -- a passion project combining all the favorite aspects of my favorite games throught the years.
 * github.io link: https://boyolabs.github.io/main-dev/void-slayer.html
