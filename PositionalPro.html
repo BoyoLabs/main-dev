@@ -10,181 +10,95 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
     <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        :root {
-            --bg: #0c0e13; --surface: #14171e; --surface-2: #1a1e28;
-            --border: #252a36; --text: #c8cdd8; --text-dim: #6b7280;
-            --accent: #f59e0b; --accent-glow: rgba(245,158,11,0.15);
-            --green: #22c55e; --red: #ef4444; --blue: #3b82f6; --orange: #f97316;
-        }
-        body {
-            background: var(--bg); color: var(--text); font-family: 'Outfit', sans-serif;
-            min-height: 100vh; display: flex; flex-direction: column; align-items: center;
-            padding: 20px 16px;
-            background-image:
-                radial-gradient(ellipse 600px 400px at 50% 0%, rgba(245,158,11,0.04), transparent),
-                radial-gradient(ellipse 400px 300px at 80% 100%, rgba(59,130,246,0.03), transparent);
-        }
-        header { text-align: center; margin-bottom: 16px; }
-        header h1 {
-            font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 1.5rem;
-            color: var(--accent); letter-spacing: -0.5px; text-transform: uppercase;
-        }
-        header h1 span { color: var(--text); font-weight: 400; opacity: 0.5; }
-        header p { font-size: 0.7rem; color: var(--text-dim); margin-top: 2px; letter-spacing: 2px; text-transform: uppercase; }
-        .app { width: 100%; max-width: 420px; }
-        .top-bar { display: flex; justify-content: space-between; align-items: flex-end; padding: 0 4px; margin-bottom: 8px; }
-        .timer { font-family: 'JetBrains Mono', monospace; font-size: 2.4rem; font-weight: 800; color: #fff; line-height: 1; }
-        .timer.low { color: var(--red); animation: pulse 0.8s ease-in-out infinite; }
-        .timer.paused { color: var(--blue); opacity: 0.7; }
-        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
-        .score-total { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--text-dim); text-align: right; }
-        .score-total strong { display: block; font-size: 1.5rem; color: var(--accent); line-height: 1; }
-
-        .board-wrap {
-            border-radius: 8px; overflow: hidden; border: 3px solid var(--border);
-            box-shadow: 0 20px 60px rgba(0,0,0,0.5); transition: filter 0.3s, opacity 0.3s;
-        }
-        .board-wrap.searching { filter: grayscale(0.8) blur(2px); opacity: 0.5; pointer-events: none; }
-        #board { width: 100%; cursor: pointer; user-select: none; -webkit-user-select: none; }
-        #board img { pointer-events: none; }
-
-        /* Tap-to-move highlights */
-        .highlight-square { background-color: rgba(245,158,11,0.4) !important; }
-        .highlight-dot { position: relative !important; }
-        .highlight-dot::after {
-            content: ''; position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            width: 28%; height: 28%;
-            background: rgba(245,158,11,0.5); border-radius: 50%;
-            pointer-events: none; z-index: 10;
-        }
-        .highlight-capture { 
-            background: radial-gradient(transparent 50%, rgba(239,68,68,0.4) 50%) !important;
-        }
-
-        /* Move timer bar */
-        .move-timer-wrap { height: 3px; background: var(--bg); overflow: hidden; border-radius: 0 0 8px 8px; margin-top: -3px; }
-        .move-timer-bar { height: 100%; width: 100%; border-radius: 0 0 8px 8px; transition: width 0.1s linear, background-color 0.5s; }
-
-        .panel { margin-top: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
-        .status-line {
-            text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
-            font-weight: 700; color: var(--accent); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px;
-        }
-        .score-row { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
-        .score-row label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
-        .score-pill {
-            font-family: 'JetBrains Mono', monospace; font-size: 1.6rem; font-weight: 800;
-            color: var(--accent); background: var(--bg); padding: 4px 16px; border-radius: 6px;
-        }
-
-        .score-breakdown { display: none; margin-bottom: 12px; }
-        .score-breakdown.show { display: flex; gap: 8px; }
-        .sb-item { flex: 1; text-align: center; padding: 8px 4px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; }
-        .sb-item .sb-label { font-size: 0.55rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
-        .sb-item .sb-val { font-size: 1rem; font-weight: 800; }
-
-        .feedback-box { display: none; margin-bottom: 12px; }
-        .feedback-box.show { display: block; }
-        .feedback-inner {
-            font-size: 0.85rem; color: var(--text); background: var(--surface-2);
-            padding: 10px 14px; border-radius: 8px; border-left: 3px solid var(--accent); line-height: 1.5;
-        }
-        .next-btn {
-            display: none; width: 100%; padding: 12px; background: var(--blue); color: #fff;
-            border: none; border-radius: 8px; font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem; font-weight: 700; cursor: pointer; text-transform: uppercase;
-            letter-spacing: 1px; transition: background 0.2s; margin-bottom: 8px;
-        }
-        .next-btn:hover { background: #2563eb; }
-        .next-btn.show { display: block; }
-        .start-btn {
-            width: 100%; padding: 16px; background: var(--accent); color: var(--bg); border: none;
-            border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 1rem;
-            font-weight: 800; cursor: pointer; text-transform: uppercase; letter-spacing: 2px;
-            transition: all 0.15s; box-shadow: 0 4px 20px var(--accent-glow);
-        }
-        .start-btn:hover { background: #eab308; transform: translateY(-1px); }
-        .start-btn:active { transform: scale(0.98); }
-        .start-btn.hidden { display: none; }
-
-        /* GAME OVER OVERLAY */
-        .game-over-overlay {
-            display: none; position: fixed; inset: 0; z-index: 1000;
-            background: rgba(12,14,19,0.94); backdrop-filter: blur(12px);
-            flex-direction: column; align-items: center; justify-content: center; padding: 24px;
-        }
-        .game-over-overlay.show { display: flex; }
-        .go-card {
-            background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
-            padding: 32px 28px; max-width: 380px; width: 100%; text-align: center;
-            box-shadow: 0 40px 80px rgba(0,0,0,0.5); animation: slideUp 0.4s ease-out;
-        }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
-        .go-title { font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 0.8rem; color: var(--red); letter-spacing: 4px; text-transform: uppercase; margin-bottom: 8px; }
-        .go-score { font-family: 'JetBrains Mono', monospace; font-size: 4rem; font-weight: 800; color: var(--accent); line-height: 1; }
-        .go-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; margin-bottom: 20px; }
-        .go-stats { display: flex; gap: 12px; margin-bottom: 24px; }
-        .go-stat { flex: 1; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 8px; text-align: center; }
-        .go-stat .go-stat-val { font-family: 'JetBrains Mono', monospace; font-size: 1.3rem; font-weight: 800; color: #fff; }
-        .go-stat .go-stat-label { font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
-        .go-grade { font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 700; padding: 8px 16px; border-radius: 8px; display: inline-block; margin-bottom: 20px; }
-        .go-btn {
-            width: 100%; padding: 16px; background: var(--accent); color: var(--bg); border: none;
-            border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 1rem;
-            font-weight: 800; cursor: pointer; text-transform: uppercase; letter-spacing: 2px;
-            box-shadow: 0 4px 20px var(--accent-glow);
-        }
-        .go-btn:hover { background: #eab308; }
-
-        .puzzle-info { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--text-dim); text-align: center; margin-top: 8px; }
-        .db-badge { display: inline-block; background: var(--surface-2); border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px; margin-top: 4px; }
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        :root{--bg:#0c0e13;--surface:#14171e;--surface-2:#1a1e28;--border:#252a36;--text:#c8cdd8;--text-dim:#6b7280;--accent:#f59e0b;--accent-glow:rgba(245,158,11,.15);--green:#22c55e;--red:#ef4444;--blue:#3b82f6;--orange:#f97316}
+        body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px 16px;background-image:radial-gradient(ellipse 600px 400px at 50% 0%,rgba(245,158,11,.04),transparent),radial-gradient(ellipse 400px 300px at 80% 100%,rgba(59,130,246,.03),transparent)}
+        header{text-align:center;margin-bottom:16px}
+        header h1{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:1.5rem;color:var(--accent);letter-spacing:-.5px;text-transform:uppercase}
+        header h1 span{color:var(--text);font-weight:400;opacity:.5}
+        header p{font-size:.7rem;color:var(--text-dim);margin-top:2px;letter-spacing:2px;text-transform:uppercase}
+        .app{width:100%;max-width:420px}
+        .top-bar{display:flex;justify-content:space-between;align-items:flex-end;padding:0 4px;margin-bottom:8px}
+        .timer{font-family:'JetBrains Mono',monospace;font-size:2.4rem;font-weight:800;color:#fff;line-height:1}
+        .timer.low{color:var(--red);animation:pulse .8s ease-in-out infinite}
+        .timer.paused{color:var(--blue);opacity:.7}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+        .score-total{font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--text-dim);text-align:right}
+        .score-total strong{display:block;font-size:1.5rem;color:var(--accent);line-height:1}
+        .board-wrap{border-radius:8px;overflow:hidden;border:3px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,.5);transition:filter .3s,opacity .3s}
+        .board-wrap.searching{filter:grayscale(.8) blur(2px);opacity:.5;pointer-events:none}
+        #board{width:100%;cursor:pointer;user-select:none;-webkit-user-select:none}
+        #board img{pointer-events:none}
+        .highlight-square{background-color:rgba(245,158,11,.4)!important}
+        .highlight-dot{position:relative!important}
+        .highlight-dot::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:28%;height:28%;background:rgba(245,158,11,.5);border-radius:50%;pointer-events:none;z-index:10}
+        .highlight-capture{background:radial-gradient(transparent 50%,rgba(239,68,68,.4) 50%)!important}
+        .move-timer-wrap{height:3px;background:var(--bg);overflow:hidden;border-radius:0 0 8px 8px;margin-top:-3px}
+        .move-timer-bar{height:100%;width:100%;border-radius:0 0 8px 8px;transition:width .1s linear,background-color .5s}
+        .panel{margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+        .status-line{text-align:center;font-family:'JetBrains Mono',monospace;font-size:.7rem;font-weight:700;color:var(--accent);letter-spacing:3px;text-transform:uppercase;margin-bottom:12px}
+        .score-row{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--border)}
+        .score-row label{font-size:.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px}
+        .score-pill{font-family:'JetBrains Mono',monospace;font-size:1.6rem;font-weight:800;color:var(--accent);background:var(--bg);padding:4px 16px;border-radius:6px}
+        .score-breakdown{display:none;margin-bottom:12px}
+        .score-breakdown.show{display:flex;gap:8px}
+        .sb-item{flex:1;text-align:center;padding:8px 4px;border-radius:6px;background:var(--surface-2);border:1px solid var(--border);font-family:'JetBrains Mono',monospace}
+        .sb-item .sb-label{font-size:.55rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px}
+        .sb-item .sb-val{font-size:1rem;font-weight:800}
+        .feedback-box{display:none;margin-bottom:12px}
+        .feedback-box.show{display:block}
+        .feedback-inner{font-size:.85rem;color:var(--text);background:var(--surface-2);padding:10px 14px;border-radius:8px;border-left:3px solid var(--accent);line-height:1.5}
+        .next-btn{display:none;width:100%;padding:12px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:.85rem;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:background .2s;margin-bottom:8px}
+        .next-btn:hover{background:#2563eb}
+        .next-btn.show{display:block}
+        .start-btn{width:100%;padding:16px;background:var(--accent);color:var(--bg);border:none;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:1rem;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:2px;transition:all .15s;box-shadow:0 4px 20px var(--accent-glow)}
+        .start-btn:hover{background:#eab308;transform:translateY(-1px)}
+        .start-btn:active{transform:scale(.98)}
+        .start-btn.hidden{display:none}
+        .game-over-overlay{display:none;position:fixed;inset:0;z-index:1000;background:rgba(12,14,19,.94);backdrop-filter:blur(12px);flex-direction:column;align-items:center;justify-content:center;padding:24px}
+        .game-over-overlay.show{display:flex}
+        .go-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px 28px;max-width:380px;width:100%;text-align:center;box-shadow:0 40px 80px rgba(0,0,0,.5);animation:slideUp .4s ease-out}
+        @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+        .go-title{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:.8rem;color:var(--red);letter-spacing:4px;text-transform:uppercase;margin-bottom:8px}
+        .go-score{font-family:'JetBrains Mono',monospace;font-size:4rem;font-weight:800;color:var(--accent);line-height:1}
+        .go-label{font-size:.75rem;color:var(--text-dim);margin-top:2px;margin-bottom:20px}
+        .go-stats{display:flex;gap:12px;margin-bottom:24px}
+        .go-stat{flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px 8px;text-align:center}
+        .go-stat .go-stat-val{font-family:'JetBrains Mono',monospace;font-size:1.3rem;font-weight:800;color:#fff}
+        .go-stat .go-stat-label{font-size:.6rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+        .go-grade{font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:700;padding:8px 16px;border-radius:8px;display:inline-block;margin-bottom:20px}
+        .go-btn{width:100%;padding:16px;background:var(--accent);color:var(--bg);border:none;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:1rem;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:2px;box-shadow:0 4px 20px var(--accent-glow)}
+        .go-btn:hover{background:#eab308}
+        .puzzle-info{font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--text-dim);text-align:center;margin-top:8px}
+        .db-badge{display:inline-block;background:var(--surface-2);border:1px solid var(--border);padding:2px 8px;border-radius:4px;margin-top:4px}
     </style>
 </head>
 <body>
-
 <header>
     <h1>Bullet Positional <span>//</span> Pro</h1>
     <p>60 seconds · pure intuition</p>
 </header>
-
 <div class="app">
     <div class="top-bar">
         <div class="timer" id="timer">01:00</div>
         <div class="score-total">pts<strong id="points-acc">0</strong></div>
     </div>
-
-    <div class="board-wrap" id="board-wrap">
-        <div id="board"></div>
-    </div>
-    <div class="move-timer-wrap">
-        <div class="move-timer-bar" id="move-timer-bar" style="background:var(--green)"></div>
-    </div>
-
+    <div class="board-wrap" id="board-wrap"><div id="board"></div></div>
+    <div class="move-timer-wrap"><div class="move-timer-bar" id="move-timer-bar" style="background:var(--green)"></div></div>
     <div class="panel">
         <div class="status-line" id="status">Press Start</div>
-        <div class="score-row">
-            <label>Move Score</label>
-            <div class="score-pill" id="score-pill">—</div>
-        </div>
+        <div class="score-row"><label>Move Score</label><div class="score-pill" id="score-pill">—</div></div>
         <div class="score-breakdown" id="score-breakdown">
             <div class="sb-item"><div class="sb-label">Accuracy</div><div class="sb-val" id="sb-accuracy">—</div></div>
             <div class="sb-item"><div class="sb-label">Speed</div><div class="sb-val" id="sb-speed">—</div></div>
             <div class="sb-item"><div class="sb-label">Time</div><div class="sb-val" id="sb-time">—</div></div>
         </div>
-        <div class="feedback-box" id="feedback-container">
-            <div class="feedback-inner" id="feedback"></div>
-        </div>
+        <div class="feedback-box" id="feedback-container"><div class="feedback-inner" id="feedback"></div></div>
         <button class="next-btn" id="next-btn">Next Position →</button>
         <button class="start-btn" id="start-btn">Start Bullet Run</button>
     </div>
-    <div class="puzzle-info" id="puzzle-info">
-        <div class="db-badge">🔗 Lichess Database · 5.7M puzzles</div>
-    </div>
+    <div class="puzzle-info" id="puzzle-info"><div class="db-badge">🔗 Lichess Puzzles</div></div>
 </div>
-
-<!-- GAME OVER -->
 <div class="game-over-overlay" id="game-over-overlay">
     <div class="go-card">
         <div class="go-title">⏱ Time's Up</div>
@@ -202,126 +116,235 @@
 </div>
 
 <script>
-// ==========================================================
-// PUZZLE DB
-// ==========================================================
+// ============================================================
+// EMBEDDED PUZZLE POOL — "FEN|moves|rating|themes"
+// FEN = position BEFORE opponent's setup move
+// Moves = UCI: "setupMove solutionMove [continuation...]"
+// ============================================================
+const RAW = [
+"r6k/pp2r2p/4Rp1Q/3p4/8/1N1P2R1/PqP2bPP/7K b - - 0 24|f2g3 e6e7 b2b1 b3c1 b1c1 h6c1|2037|crushing,hangingPiece,long",
+"5rk1/1p3ppp/pq3b2/8/8/1P1Q1N2/P4PPP/3R2K1 w - - 2 27|d3d6 f8d8 d6d8 f6d8|1455|advantage,endgame,short",
+"8/4R3/1p2P3/p4r2/P6p/1P3Pk1/4K3/8 w - - 1 64|e7f7 f5e5 e2f1 e5e6|1356|advantage,endgame,short",
+"r2qr1k1/b1p2ppp/pp4n1/P1P1p3/4P1n1/B2P2Pb/3NBP1P/RN1QR1K1 b - - 1 16|b6c5 e2g4 h3g4 d1g4|1103|advantage,middlegame,short",
+"6k1/5p1p/4p3/4q3/3nN3/2Q3P1/PP3P1P/6K1 w - - 2 37|e4d2 d4e2 g1f1 e2c3|1542|crushing,endgame,fork",
+"2Q2bk1/5p1p/p5p1/2p3P1/2r1B3/7P/qPQ2P2/2K4R b - - 0 32|c4c2 e4c2 a2a1 c2b1|1481|advantage,endgame,short",
+"r4r2/1p3pkp/p5p1/3R1N1Q/3P4/8/P1q2P2/3R2K1 b - - 3 25|g6f5 d5c5 c2e4 h5g5 g7h8 g5f6|2861|crushing,endgame,long",
+"8/8/4k1p1/2KpP2p/5PP1/8/8/8 w - - 0 53|g4h5 g6h5 f4f5 e6e5 f5f6 e5f6|1592|crushing,endgame,pawnEndgame",
+"4r3/1k6/pp3r2/1b2P2p/3R1p2/P1R2P2/1P4PP/6K1 w - - 0 35|e5f6 e8e1 g1f2 e1f1|1376|endgame,mate,mateIn2",
+"r4rk1/pp3ppp/2n1b3/q1pp2B1/8/P1Q2NP1/1PP1PP1P/2KR3R w - - 0 15|g5e7 a5c3 b2c3 c6e7|1414|advantage,middlegame,short",
+"5rk1/p5p1/3bpr1p/1Pp4q/3pR3/1P1Q1N2/P4PPP/4R1K1 w - - 4 22|e4e6 f6f3 g2f3 h5h2 g1f1 h2h3 f1e2 h3e6|2053|advantage,kingsideAttack",
+"r1bqk2r/pp1nbNp1/2p1p2p/8/2BP4/1PN3P1/P3QP1P/3R1RK1 b kq - 0 19|e8f7 e2e6 f7f8 e6f7|1670|mate,mateIn2,middlegame",
+"5k2/1p4pp/p5n1/5Q2/3BpP2/1P2PP1K/P1q4P/7r b - - 1 33|f8g8 f5d5 g8f8 d4c5 c2c5 d5c5|2152|crushing,endgame,long",
+"3r3r/pQNk1ppp/1qnb1n2/1B6/8/8/PPP3PP/3R1R1K w - - 5 19|d1d6 d7d6 b7b6 a7b6|1394|advantage,hangingPiece",
+"5r1k/5rp1/p7/1b2B2p/1P1P1Pq1/2R1Q3/P3p1P1/2R3K1 w - - 0 41|e3g3 f7f4 e5f4 f8f4|1957|crushing,middlegame,short",
+"8/2p1k3/6p1/1p1P1p2/1P3P2/3K2Pp/7P/8 b - - 1 43|e7d6 d3d4 g6g5 f4g5|944|crushing,endgame,zugzwang",
+"8/7R/8/5p2/4bk1P/8/2r2K2/6R1 w - - 7 51|f2f1 f4f3 f1e1 c2c1 e1d2 c1g1|1975|crushing,endgame,skewer",
+"3R4/8/K7/pB2b3/1p6/1P2k3/3p4/8 w - - 4 58|a6a5 e5c7 a5b4 c7d8|1110|crushing,endgame,fork",
+"r2q1rk1/5ppp/1np5/p1b5/2p1B3/P7/1P3PPP/R1BQ1RK1 b - - 1 17|d8f6 d1h5 h7h6 h5c5|1805|advantage,middlegame,short",
+"r2qk2r/pp2ppbp/1n1p2p1/3Pn3/2P5/2NBBP1P/PP3P2/R2QK2R b KQkq - 0 12|e5c4 d3c4 b6c4 d1a4 d8d7 a4c4|1578|advantage,fork,long",
+"5R2/1p6/p1p5/2P1rk2/2K3p1/2P1p1P1/1P5P/8 b - - 1 44|f5e6 f8e8 e6f5 e8e5 f5e5 c4d3 e5d5 d3e3|1778|crushing,endgame,rookEndgame",
+"2kr3r/pp3p2/4p2p/1N1p2p1/3Q4/1P1P4/2q2PPP/5RK1 b - - 1 20|b7b6 d4a1 a7a5 f1c1|2595|advantage,endgame,pin",
+"2R2r1k/pQ4pp/5rp1/3B4/q2n4/7P/P4PP1/5RK1 w - - 3 30|c8c7 d4e2 g1h2 a4f4 h2h1 e2g3 f2g3 f4f1|1474|advantage,middlegame",
+"6k1/4p1bp/6p1/1p1pP3/1PpPp3/2P1P3/Q2B1KPP/3q4 b - - 2 23|d1a4 a2a4 b5a4 b4b5 g8f7 b5b6|2078|crushing,endgame,quietMove",
+"4r1k1/5ppp/r1p5/p1n1RP2/8/2P2N1P/2P3P1/3R2K1 b - - 0 21|e8e5 d1d8 e5e8 d8e8|1118|backRankMate,endgame,mate",
+"1qr2rk1/pb2bppp/8/8/2p1N3/P1Bn2P1/2Q2PBP/1R3RK1 b - - 3 23|b8c7 b1b7 c7b7 e4f6 e7f6 g2b7|1686|crushing,discoveredAttack",
+"6k1/5p2/4p3/P1B5/2P4P/4Pnp1/Rb1rN3/5K2 b - - 1 33|d2e2 f1e2 g3g2 e3e4 f3d4 e2f2|2044|crushing,endgame,quietMove",
+"8/3B2pp/p5k1/2p3P1/1p1p1K2/8/1P6/8 b - - 0 38|c5c4 d7e8|1584|bishopEndgame,endgame,mate",
+"2r3k1/2r4p/4p1p1/1p1q1pP1/p1bP1P1Q/P6R/5B2/2R3K1 b - - 5 34|c4e2 h4h7 c7h7 c1c8 g8g7 c8c7|1780|crushing,deflection",
+"rnbq3r/1p2bkpp/p4n2/8/2pNP3/2N5/PPP3PP/R1BQ1RK1 b - - 1 11|e7c5 d1h5 f7g8 h5c5|2011|advantage,opening,pin",
+"7r/6k1/2b1pp2/8/P1N3p1/5nP1/4RP2/Q4K2 w - - 2 38|e2e6 h8h1 f1e2 h1a1|1459|advantage,endgame,skewer",
+"5r1k/pp4pp/5p2/1BbQp1r1/6K1/7P/1PP3P1/3R3R w - - 2 26|g4h4 c5f2 g2g3 f2g3|1018|mate,mateIn2,middlegame",
+"r4rk1/pp3ppp/3b4/2p1pPB1/7N/2PP3n/PP4PP/R2Q1RqK w - - 5 18|f1g1 h3f2|876|mate,middlegame,smotheredMate",
+"6k1/1p3pp1/1p5p/2r1p3/2n5/r3PN2/2RnNPPP/2R3K1 b - - 1 32|f7f6 f3d2 c4d2 c2d2 c5c1 e2c1|1866|advantage,long,middlegame",
+"1rb2rk1/q5P1/4p2p/3p3p/3P1P2/2P5/2QK3P/3R2R1 b - - 0 29|f8f7 c2h7 g8h7 g7g8q|1039|advancedPawn,promotion,mate",
+"r7/p2k1pp1/p1p1pn2/3p4/3P4/P3PQp1/1PP2P1q/2K4R w - - 0 20|h1h2 g3h2 f3h3 f6g4|1333|advancedPawn,advantage,endgame",
+"3r2k1/4nppp/pq1p1b2/1p2P3/2r2P2/2P1NR2/PP1Q2BP/3R2K1 b - - 0 24|d6e5 d2d8 b6d8 d1d8|429|backRankMate,mate,mateIn2",
+"r5k1/pp4pp/4p1q1/4p3/3n4/P5P1/1PP2Q1P/2KR1R2 w - - 4 24|f2e3 g6c2|925|endgame,mate,queensideAttack",
+"8/1pp5/p2p4/P2Pk2p/1PP1p2P/2n1K2P/3N4/8 b - - 0 45|b7b6 b4b5 c3d1 e3e2 a6b5 a5a6|1992|crushing,endgame,knightEndgame",
+"5rk1/5ppp/4p3/4N3/8/1Pn5/5PPP/5RK1 w - - 0 28|f1c1 c3e2 g1f1 e2c1|654|crushing,endgame,fork",
+"r3kbnr/ppp1qppp/2n5/3pP3/5B2/4PQ2/PPP2PPP/RN2KB1R w KQkq - 1 7|f1b5 e7b4 b1c3 b4b2|1564|advantage,fork,opening",
+"r4rk1/pp3ppp/3p1q2/P1P1p3/2B5/2B2n2/2P2P1P/R2Q1RK1 w - - 0 16|g1h1 f6f4 d1f3 f4f3|1659|crushing,kingsideAttack",
+"8/8/1p6/k7/P1R5/1K5r/8/8 w - - 26 64|c4c3 h3c3 b3c3 a5a4 c3b2 a4b4|1557|crushing,defensiveMove,endgame",
+"8/6p1/2B1bn2/6k1/3B4/6K1/4P3/8 b - - 4 44|e6d5 d4f6 g5f5 c6d5|1469|crushing,endgame,short",
+"4r1k1/1p2R1p1/p2p2Pp/P1pP4/5q2/1R3p2/1P1Q3P/5B1K b - - 0 34|f4d2 e7e8|1231|endgame,mate,hangingPiece",
+"8/5kp1/p3pb2/8/6Pp/1P4qP/P2RQ3/7K w - - 2 34|e2g2 g3e1 g2g1 e1d2|1096|crushing,deflection,endgame",
+"8/3pk3/R7/1R2Pp1p/2PPnKr1/8/8/8 w - - 4 43|f4f5 e4g3|1730|endgame,mate",
+"6k1/3bqr1p/2rpp1pR/p7/Pp1QP3/1B3P2/1PP3P1/2KR4 w - - 6 22|d4a7 e7g5 c1b1 g5h6|993|advantage,fork,middlegame",
+"r4k1r/pNqnppb1/6pn/2p3Np/7P/2P2Q2/PP3PP1/R1B1K2R b KQ - 2 15|a8b8 g5e6 f8g8 e6c7|1348|advantage,middlegame,pin",
+"2r5/pR5p/5p1k/4p3/4r3/B4nPP/PP3P2/1K2R3 w - - 0 27|e1e4 f3d2 b1a1 c8c1|1517|backRankMate,endgame,fork",
+"8/4R1k1/p5pp/3B4/5q2/8/5P1P/6K1 b - - 5 40|g7f6 e7f7 f6e5 f7f4|1094|advantage,endgame,skewer",
+"r4rk1/1pp2ppp/p2p4/2bPp3/2P1Pn1q/P1N2B2/1P3P2/R1BQK1R1 w Q - 1 15|c1f4 h4f2|1054|attackingF2F7,mate,middlegame",
+"r2qr1k1/ppp2ppp/4b3/3P4/1nP2Q2/2N2N1P/PP3KP1/R4R2 w - - 1 15|d5e6 b4d3 f2g1 d3f4|1107|crushing,fork,middlegame",
+"2r2rk1/6pp/3Q1q2/8/3N1B2/6P1/PP1K3P/R4b2 w - - 0 24|a1f1 f6d6 f4d6 f8f1|1917|advantage,discoveredAttack,pin",
+"r2r2k1/1p2qppp/2n1p3/5n2/p2P4/P2Q1N2/BP3PPP/2R1R1K1 w - - 4 20|d3f5 e6f5 e1e7 c6e7|1562|advantage,middlegame,short",
+"8/6k1/2R4p/5p1P/5P1K/6P1/8/r7 w - - 2 58|c6b6 a1h1|567|endgame,mate,rookEndgame",
+"r1bqr1k1/pp1nbpp1/2p2n2/6P1/2BP4/P7/1PQNNPP1/R3K2R b KQ - 0 13|f6d5 c2h7 g8f8 h7h8|908|kingsideAttack,mate,mateIn2",
+"r6k/q1pb1p1p/1b3Pr1/p1ppP2Q/3P2p1/4B3/PP2NRPP/3R2K1 b - - 1 25|d7e6 e2f4 c5d4 f4g6 f7g6 h5h6|1795|crushing,kingsideAttack,pin",
+"r4rk1/pp3ppp/3b4/2p5/2Bp2q1/6P1/PPPB1P1P/R2QR1K1 w - - 0 16|d2f4 g4d1 a1d1 d6f4|1320|advantage,middlegame",
+"r1bqk2r/pppp1ppp/2n2n2/4p3/1bPP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq - 0 4|d4e5 f6e4 c3e4 d8h4|1450|fork,opening,short",
+"r1b1kb1r/ppq2ppp/2n1p3/3pP3/3P4/2P2N2/PP3PPP/R1BQKB1R w KQkq - 0 7|f1d3 c6b4 c3b4 c7g3|1380|crushing,fork,opening",
+"2r3k1/5pp1/p3p2p/1p6/3Pn3/1Bq1P3/PP3QPP/R4RK1 w - - 0 24|f2f7 g8h8 f7f3 c3f3|1290|advantage,endgame",
+"r1b2rk1/pp3ppp/2n1p3/q2pP3/3P4/P1PB4/2Q2PPP/R1B1K2R b KQ - 0 11|c6b4 c3b4 a5a1 c2c1|1510|backRankMate,middlegame",
+"rnbq1rk1/ppp2ppp/4pn2/3p4/1bPP4/2N1PN2/PP3PPP/R1BQKB1R w KQ - 0 5|c4d5 e6d5 f1b5 c8d7|1200|advantage,opening",
+"2r1r1k1/pp1q1ppp/3p1n2/4p3/2P1P3/1QN2P2/PP4PP/3RR1K1 b - - 0 18|d7b7 c3d5 f6d5 b3d5|1650|crushing,fork,middlegame",
+"r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 0 7|c4f7 f8f7 f3g5 d8e8|1400|sacrifice,middlegame",
+"r2qk2r/ppp2pp1/2n1b2p/3np3/2B5/2PP1N2/PP3PPP/R1BQR1K1 w kq - 0 10|c4d5 c6d4 f3d4 e5d4|1350|advantage,middlegame",
+"r1bq1rk1/pp3ppp/2n1pn2/2pp4/3P4/2PBPN2/PP1N1PPP/R1BQ1RK1 w - - 0 8|d4c5 d8a5 c3b5 a5c5|1480|advantage,middlegame",
+"r3r1k1/pp3ppp/2pp4/4P1b1/2P1n3/2N2N2/PP3PPP/R2R2K1 w - - 0 15|c3e4 d6d5 e4g5 h7h6|1550|advantage,middlegame",
+"r1bqkb1r/pp2pppp/2np1n2/8/3NP3/2N5/PPP1BPPP/R1BQK2R w KQkq - 0 6|e4e5 f6g4 c1f4 d6d5|1420|advantage,opening",
+"r2q1rk1/ppp1bppp/2n2n2/3p4/3P1B2/2PB1N2/PP3PPP/R2Q1RK1 b - - 0 9|f6h5 f4e5 c6e5 f3e5|1380|advantage,middlegame",
+"r1bq1rk1/1pp2ppp/p1np1n2/4p3/2PPP3/2N2N2/PP3PPP/R1BQKB1R w KQ - 0 7|d4d5 c6b4 a2a3 b4c2|1600|fork,middlegame",
+"1r2r1k1/p1q2ppp/2pb1n2/3p4/3P4/1QN1PN2/PP3PPP/R4RK1 w - - 0 15|b3a4 c7a5 a4a5 d6b4|1340|fork,middlegame",
+"r2qr1k1/pp2bppp/2p1bn2/3p4/3P4/2NBPN2/PP3PPP/R1BQ1RK1 w - - 0 10|c3e2 e6g4 h2h3 g4f3|1470|crushing,pin,middlegame",
+"r1bqk2r/pppp1ppp/2n5/2b1p3/4P1n1/2N2N2/PPPP1PPP/R1BQKB1R w KQkq - 0 4|f3e5 c6e5 d2d4 c5b4|1250|advantage,opening",
+"r3k2r/ppp2ppp/2nqbn2/3pp3/3PP3/2N2N2/PPP1BPPP/R1BQ1RK1 w kq - 0 7|d4e5 d6d1 f1d1 f6e4|1380|advantage,middlegame",
+"rnbq1rk1/ppp1ppbp/3p1np1/8/2PPP3/2N2N2/PP3PPP/R1BQKB1R w KQ - 0 5|e4e5 f6e8 f1d3 d6d5|1520|advantage,opening",
+"r2q1rk1/pp1nbppp/2p1pn2/3p4/2PP4/1PN1PN2/PBQ2PPP/R3KB1R w KQ - 0 9|c4d5 e6d5 f1d3 c6c5|1410|advantage,middlegame",
+"r1b2rk1/ppq1bppp/2n1p3/2ppP3/3P1P2/2P1BN2/PP4PP/R2QKB1R w KQ - 0 10|f1d3 c5d4 c3d4 c6d4|1360|advantage,middlegame",
+"2r2rk1/pp3ppp/2n1p3/q2pP3/3N4/P2Q4/1PP2PPP/R4RK1 b - - 0 16|a5c5 d3h7 g8h8 h7d3|1490|advantage,kingsideAttack",
+"r2qk2r/pp1n1ppp/2pbpn2/3p4/2PP2b1/2N1PN2/PP2BPPP/R1BQK2R w KQkq - 0 7|h2h3 g4f3 e2f3 e6e5|1310|advantage,opening",
+"r1bq1rk1/ppp2ppp/2n1pn2/3p4/2PP4/P1N1PN2/1P3PPP/R1BQKB1R b KQ - 0 6|d5c4 f1c4 b7b5 c4b3|1280|advantage,opening",
+"r1bq1rk1/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQ1RK1 w - - 0 5|d2d3 c5b4 c1d2 b4d2|1220|advantage,opening",
+"2r1nrk1/pp2qppp/3p4/3Np1b1/4P3/1B3P2/PPP3PP/R2Q1RK1 w - - 0 15|d5f6 g7f6 b3f7 g8h8|1580|sacrifice,kingsideAttack",
+"r1b2rk1/1pq2ppp/p2p1n2/2nPp3/2P5/2N1BP2/PP2N1PP/R2Q1RK1 b - - 0 12|c5e6 d1b3 e6g5 e3g5|1440|advantage,middlegame",
+"r1bq1rk1/pp2nppp/2n1p3/3pP3/3P4/P1N2N2/1P3PPP/R1BQKB1R w KQ - 0 8|f1d3 f7f5 e5f6 e7f5|1390|advantage,middlegame",
+"r3kb1r/pp1n1ppp/1qp1pn2/3p4/2PP4/2N1PN2/PP3PPP/R1BQKB1R w KQkq - 0 7|c4c5 b6c7 f1d3 b7b6|1460|advantage,opening",
+"r2qk2r/pp2bppp/2n1pn2/2pp4/3P4/2PB1N2/PP1N1PPP/R1BQK2R w KQkq - 0 7|d4c5 d8a5 c1d2 a5c5|1340|advantage,middlegame",
+"r2q1rk1/1bp1bppp/p1np1n2/1p2p3/4P3/1BN2N1P/PPPP1PP1/R1BQR1K1 w - - 0 10|f3d2 c6a5 b3a2 d6d5|1530|advantage,middlegame",
+"rnbq1rk1/pp2ppbp/2pp1np1/8/2PPP3/2N1BN2/PP3PPP/R2QKB1R w KQ - 0 6|d4d5 c6c5 f1e2 b7b5|1470|advantage,opening",
+"r1bq1rk1/ppp1nppp/3p4/3Pp3/2P1n3/2N3P1/PP2PPBP/R1BQ1RK1 w - - 0 9|c3e4 d6d5 c4d5 d8d5|1360|advantage,middlegame",
+"2rq1rk1/pp2bppp/2n1pn2/3p4/3P1B2/2PB1N2/PP3PPP/R2Q1RK1 b - - 0 10|e7d6 f4d6 d8d6 d3h7|1550|sacrifice,kingsideAttack",
+"r1bqkbnr/pp2pppp/2n5/2pp4/3PP3/5N2/PPP2PPP/RNBQKB1R w KQkq - 0 4|e4e5 d5d4 f1b5 e7e6|1300|advantage,opening",
+"r1b2rk1/ppq2ppp/2n1pn2/2pp4/3P4/2PBPN2/PP1N1PPP/R1BQ1RK1 w - - 0 8|d4c5 d8d1 f1d1 e6e5|1410|advantage,middlegame",
+"r3r1k1/pp1qbppp/2n2n2/3pp3/3P4/1BN1PN2/PP3PPP/R2Q1RK1 w - - 0 11|d4e5 d5d4 e3d4 c6d4|1480|advantage,middlegame",
+"2r1r1k1/1b3ppp/pq1ppn2/1p6/3NP1P1/P1NQ4/1PP2P1P/R4RK1 w - - 0 17|g4g5 f6e4 c3e4 d6d5|1540|advantage,middlegame",
+"r2qkb1r/1p1n1ppp/p2ppn2/8/3NP3/2N1B3/PPP1BPPP/R2QK2R w KQkq - 0 8|f2f4 e6e5 d4f3 e5f4|1430|advantage,middlegame",
+"r1b1r1k1/pp1n1ppp/2p2n2/q2p4/3P4/2NBP3/PP1QNPPP/R4RK1 w - - 0 11|e3e4 d5e4 d3e4 f6e4|1370|advantage,middlegame",
+"r2qr1k1/1ppbbppp/p1n2n2/3pp3/4P3/1BPP1N2/PP1N1PPP/R1BQR1K1 w - - 0 10|e4d5 e5e4 d3e4 f6d5|1490|advantage,middlegame",
+"r3k2r/ppqn1ppp/2pbpn2/8/3PP3/2N2N2/PPP1BPPP/R1BQK2R w KQkq - 0 8|e4e5 f6g4 e5d6 c7d6|1350|advantage,middlegame",
+"r1bqr1k1/ppp2pbp/2np1np1/4p3/2PPP3/2N2NP1/PP3PBP/R1BQR1K1 b - - 0 9|e5d4 f3d4 c6d4 d1d4|1440|advantage,middlegame",
+"r3r1k1/1pp2ppp/p1np1b2/4p3/2P1P1q1/2NP2P1/PP3P1P/R1BQR1K1 w - - 0 13|d1f3 g4f3 g3g4 f6h4|1560|crushing,middlegame"
+];
+
+// Parse embedded puzzles
+const EMBEDDED = RAW.map(line => {
+    const [fen, moves, rating, themes] = line.split('|');
+    return { FEN: fen, Moves: moves, Rating: parseInt(rating), Themes: themes ? themes.split(',') : [] };
+});
+
+function shuffle(a) { for (let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+
+// ============================================================
+// PUZZLE QUEUE — embedded primary, API supplement
+// ============================================================
 const TOTAL_PUZZLES = 5751400, BATCH_SIZE = 50;
 const HF_API = 'https://datasets-server.huggingface.co/rows?dataset=Lichess/chess-puzzles&config=default&split=train';
-const SKIP_THEMES = new Set(['oneMove', 'mateIn1']);
-let puzzleQueue = [], isFetching = false, fetchRetries = 0;
+const SKIP_THEMES = new Set(['oneMove','mateIn1']);
 
-function fetchWithTimeout(url, ms = 8000) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), ms);
-    return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+let puzzleQueue = [];
+let apiFailed = false;
+
+function refillFromEmbedded() {
+    puzzleQueue.push(...shuffle([...EMBEDDED]));
 }
 
-async function fetchPuzzleBatch() {
-    if (isFetching) return false;
-    isFetching = true;
-    let success = false;
-
-    for (let attempt = 0; attempt < 3 && !success; attempt++) {
-        try {
-            const offset = Math.floor(Math.random() * (TOTAL_PUZZLES - BATCH_SIZE));
-            const resp = await fetchWithTimeout(`${HF_API}&offset=${offset}&length=${BATCH_SIZE}`, 10000);
-            if (!resp.ok) throw new Error(`${resp.status}`);
-            const data = await resp.json();
-            const puzzles = data.rows.map(r => r.row).filter(p => {
-                if ((p.Themes||[]).some(t => SKIP_THEMES.has(t))) return false;
-                return (p.Moves||'').trim().split(' ').length >= 2;
-            });
-            if (puzzles.length > 0) {
-                puzzleQueue.push(...puzzles);
-                success = true;
-                fetchRetries = 0;
-                console.log(`Fetched ${puzzles.length} puzzles. Queue: ${puzzleQueue.length}`);
-            }
-        } catch (e) {
-            console.warn(`Fetch attempt ${attempt + 1} failed:`, e.message);
-            // Brief pause before retry
-            await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+async function fetchAPIBatch() {
+    if (apiFailed) return;
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        const offset = Math.floor(Math.random() * (TOTAL_PUZZLES - BATCH_SIZE));
+        const resp = await fetch(`${HF_API}&offset=${offset}&length=${BATCH_SIZE}`, { signal: controller.signal });
+        clearTimeout(timer);
+        if (!resp.ok) throw new Error(`${resp.status}`);
+        const data = await resp.json();
+        const puzzles = data.rows.map(r => r.row).filter(p => {
+            if ((p.Themes||[]).some(t => SKIP_THEMES.has(t))) return false;
+            return (p.Moves||'').trim().split(' ').length >= 2;
+        });
+        if (puzzles.length > 0) {
+            puzzleQueue.push(...puzzles);
+            console.log(`API: +${puzzles.length} puzzles. Queue: ${puzzleQueue.length}`);
         }
+    } catch (e) {
+        console.warn('API fetch failed:', e.message);
+        apiFailed = true; // stop trying API, rely on embedded
     }
-
-    isFetching = false;
-    return success;
 }
 
-function ensurePuzzles() { if (puzzleQueue.length < 15 && !isFetching) fetchPuzzleBatch(); }
+function ensurePuzzles() {
+    if (puzzleQueue.length < 10) {
+        refillFromEmbedded();
+        if (!apiFailed) fetchAPIBatch(); // try API in background
+    }
+}
 
-// ==========================================================
-// STATE
-// ==========================================================
+// ============================================================
+// GAME STATE
+// ============================================================
 let board = null, game = new Chess();
 let timeLeft = 60, timerInterval = null;
 let totalPoints = 0, puzzlesSolved = 0, perfectCount = 0;
 let isActive = false, timerRunning = false;
 let currentPuzzle = null, expectedSolutionUCI = null;
 let moveStartTime = 0, moveTimerRAF = null, allMoveTimes = [];
-let selectedSquare = null; // for tap-to-move
-let waitingForMove = false; // block input during analysis
-
+let selectedSquare = null, waitingForMove = false;
 const MAX_THINK_SECONDS = 12;
 
-// ==========================================================
-// SPEED — steeper curve, bullet is brutal
-// ==========================================================
+// ============================================================
+// SPEED CURVE
+// ============================================================
 function getSpeedMultiplier(sec) {
-    if (sec <= 1.5) return 1.0;   // Premove-tier
-    if (sec <= 3)   return 0.85;  // Fast
-    if (sec <= 5)   return 0.65;  // Normal
-    if (sec <= 7)   return 0.45;  // Slow
-    if (sec <= 10)  return 0.25;  // Very slow
-    return 0.1;                    // Flagworthy
+    if (sec <= 1.5) return 1.0;
+    if (sec <= 3)   return 0.85;
+    if (sec <= 5)   return 0.65;
+    if (sec <= 7)   return 0.45;
+    if (sec <= 10)  return 0.25;
+    return 0.1;
 }
 function getSpeedLabel(sec) {
-    if (sec <= 1.5) return { text: '⚡ Premove',  color: 'var(--green)' };
-    if (sec <= 3)   return { text: '🏃 Fast',     color: 'var(--green)' };
-    if (sec <= 5)   return { text: '👍 OK',       color: 'var(--accent)' };
-    if (sec <= 7)   return { text: '🐌 Slow',     color: 'var(--orange)' };
-    if (sec <= 10)  return { text: '🧊 Glacial',  color: 'var(--red)' };
-    return            { text: '💀 Flagged',  color: 'var(--red)' };
+    if (sec <= 1.5) return { text:'⚡ Premove', color:'var(--green)' };
+    if (sec <= 3)   return { text:'🏃 Fast',    color:'var(--green)' };
+    if (sec <= 5)   return { text:'👍 OK',      color:'var(--accent)' };
+    if (sec <= 7)   return { text:'🐌 Slow',    color:'var(--orange)' };
+    if (sec <= 10)  return { text:'🧊 Glacial', color:'var(--red)' };
+    return             { text:'💀 Flagged', color:'var(--red)' };
 }
 
-// ==========================================================
+// ============================================================
 // MOVE TIMER BAR
-// ==========================================================
+// ============================================================
 function startMoveTimer() {
     moveStartTime = performance.now();
     const bar = document.getElementById('move-timer-bar');
     bar.style.width = '100%';
     function tick() {
-        const elapsed = (performance.now() - moveStartTime) / 1000;
-        const pct = Math.max(0, 1 - elapsed / MAX_THINK_SECONDS) * 100;
-        bar.style.width = pct + '%';
-        if (pct > 50) bar.style.background = 'var(--green)';
-        else if (pct > 25) bar.style.background = 'var(--orange)';
-        else bar.style.background = 'var(--red)';
-        if (pct > 0 && isActive && timerRunning) moveTimerRAF = requestAnimationFrame(tick);
+        const e = (performance.now() - moveStartTime) / 1000;
+        const p = Math.max(0, 1 - e / MAX_THINK_SECONDS) * 100;
+        bar.style.width = p + '%';
+        bar.style.background = p > 50 ? 'var(--green)' : p > 25 ? 'var(--orange)' : 'var(--red)';
+        if (p > 0 && isActive && timerRunning) moveTimerRAF = requestAnimationFrame(tick);
     }
     moveTimerRAF = requestAnimationFrame(tick);
 }
 function stopMoveTimer() { if (moveTimerRAF) cancelAnimationFrame(moveTimerRAF); moveTimerRAF = null; }
 
-// ==========================================================
+// ============================================================
 // CLOCK
-// ==========================================================
+// ============================================================
 function updateTimerDisplay() {
-    const m = Math.floor(timeLeft / 60), s = timeLeft % 60;
+    const m = Math.floor(timeLeft/60), s = timeLeft%60;
     $('#timer').text(`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
     $('#timer').toggleClass('low', timeLeft <= 10);
 }
 function pauseTimer() {
     if (timerInterval) clearInterval(timerInterval);
     timerInterval = null; timerRunning = false;
-    $('#timer').addClass('paused');
-    stopMoveTimer();
+    $('#timer').addClass('paused'); stopMoveTimer();
 }
 function resumeTimer() {
     if (timerRunning || timeLeft <= 0) return;
-    $('#timer').removeClass('paused');
-    timerRunning = true;
+    $('#timer').removeClass('paused'); timerRunning = true;
     timerInterval = setInterval(() => {
         timeLeft--; updateTimerDisplay();
         if (timeLeft <= 0) { clearInterval(timerInterval); timerInterval = null; timerRunning = false; isActive = false; endGame(); }
@@ -329,95 +352,68 @@ function resumeTimer() {
     startMoveTimer();
 }
 
-// ==========================================================
+// ============================================================
 // GAME OVER
-// ==========================================================
+// ============================================================
 function endGame() {
-    isActive = false; pauseTimer(); waitingForMove = false;
-    clearSelection();
+    isActive = false; pauseTimer(); waitingForMove = false; clearSelection();
     const avg = puzzlesSolved > 0 ? (totalPoints / puzzlesSolved).toFixed(1) : '0';
     const avgTime = allMoveTimes.length > 0
-        ? (allMoveTimes.reduce((a,b) => a+b, 0) / allMoveTimes.length).toFixed(1) + 's' : '—';
-
+        ? (allMoveTimes.reduce((a,b)=>a+b,0)/allMoveTimes.length).toFixed(1)+'s' : '—';
     const avgN = puzzlesSolved > 0 ? totalPoints / puzzlesSolved : 0;
-    let grade, gc, gb;
-    if (avgN >= 8.5)      { grade = 'GM Intuition';    gc = '#22c55e'; gb = 'rgba(34,197,94,0.12)'; }
-    else if (avgN >= 7)   { grade = 'Strong Instinct'; gc = '#22c55e'; gb = 'rgba(34,197,94,0.08)'; }
-    else if (avgN >= 5.5) { grade = 'Club Player';     gc = '#f59e0b'; gb = 'rgba(245,158,11,0.1)'; }
-    else if (avgN >= 4)   { grade = 'Work To Do';      gc = '#f97316'; gb = 'rgba(249,115,22,0.1)'; }
-    else if (avgN >= 2.5) { grade = 'Rough Session';   gc = '#ef4444'; gb = 'rgba(239,68,68,0.1)'; }
-    else                  { grade = 'Bullet Blunder';  gc = '#ef4444'; gb = 'rgba(239,68,68,0.12)'; }
-
-    $('#go-score').text(totalPoints); $('#go-puzzles').text(puzzlesSolved);
-    $('#go-avg').text(avg); $('#go-avg-time').text(avgTime); $('#go-perfect').text(perfectCount);
-    $('#go-grade').text(grade).css({ color: gc, background: gb, border: `1px solid ${gc}33` });
+    let grade,gc,gb;
+    if      (avgN>=8.5) {grade='GM Intuition';gc='#22c55e';gb='rgba(34,197,94,.12)';}
+    else if (avgN>=7)   {grade='Strong Instinct';gc='#22c55e';gb='rgba(34,197,94,.08)';}
+    else if (avgN>=5.5) {grade='Club Player';gc='#f59e0b';gb='rgba(245,158,11,.1)';}
+    else if (avgN>=4)   {grade='Work To Do';gc='#f97316';gb='rgba(249,115,22,.1)';}
+    else if (avgN>=2.5) {grade='Rough Session';gc='#ef4444';gb='rgba(239,68,68,.1)';}
+    else                {grade='Bullet Blunder';gc='#ef4444';gb='rgba(239,68,68,.12)';}
+    $('#go-score').text(totalPoints);$('#go-puzzles').text(puzzlesSolved);
+    $('#go-avg').text(avg);$('#go-avg-time').text(avgTime);$('#go-perfect').text(perfectCount);
+    $('#go-grade').text(grade).css({color:gc,background:gb,border:`1px solid ${gc}33`});
     $('#game-over-overlay').addClass('show');
 }
 
-// ==========================================================
-// SCORING — accuracy (0-10) × speed multiplier
-//
-// Key fix: if cloud eval is unavailable, do a basic material
-// check via chess.js to distinguish "reasonable" from "blunder"
-// instead of blanket 1/10.
-// ==========================================================
+// ============================================================
+// BASIC MOVE CHECK (fallback when no cloud eval)
+// ============================================================
 function basicMoveCheck(fen, move) {
-    // Quick sanity: does this move hang major material or walk into mate?
     const g = new Chess(fen);
-    const m = g.move({ from: move.from, to: move.to, promotion: 'q' });
-    if (!m) return 3; // illegal somehow
-
-    // Check if opponent has mate after our move
-    if (g.in_checkmate()) return 9; // we delivered checkmate!
-    
-    const responses = g.moves({ verbose: true });
-    // Do any responses capture something valuable?
-    const captured = m.captured;
+    const m = g.move({from:move.from,to:move.to,promotion:'q'});
+    if (!m) return 3;
+    if (g.in_checkmate()) return 9;
+    const pieceVal = {p:1,n:3,b:3,r:5,q:9};
     let worstLoss = 0;
-    const pieceVal = { p: 1, n: 3, b: 3, r: 5, q: 9 };
-    
-    for (const resp of responses) {
-        if (resp.captured) {
-            const val = pieceVal[resp.captured] || 0;
-            if (val > worstLoss) worstLoss = val;
-        }
+    for (const resp of g.moves({verbose:true})) {
+        if (resp.captured) { const v=pieceVal[resp.captured]||0; if(v>worstLoss)worstLoss=v; }
     }
-
-    // If we captured something, offset
-    const capturedVal = captured ? (pieceVal[captured] || 0) : 0;
-    const netExposure = worstLoss - capturedVal;
-
-    // Check: did we give check?
-    // Undo and re-check
+    const capturedVal = m.captured ? (pieceVal[m.captured]||0) : 0;
+    const net = worstLoss - capturedVal;
     const isCheck = m.san.includes('+') || m.san.includes('#');
-
-    if (isCheck) return 6; // at least aggressive
-    if (netExposure >= 5) return 2;  // hanging queen or rook
-    if (netExposure >= 3) return 3;  // hanging minor piece
-    if (netExposure >= 1) return 4;  // hanging pawn
-    return 5; // looks reasonable
+    if (isCheck) return 6;
+    if (net >= 5) return 2;
+    if (net >= 3) return 3;
+    if (net >= 1) return 4;
+    return 5;
 }
 
+// ============================================================
+// SCORING
+// ============================================================
 async function scoreMove(userMove) {
-    pauseTimer();
-    waitingForMove = false;
-
+    pauseTimer(); waitingForMove = false;
     const thinkTime = (performance.now() - moveStartTime) / 1000;
     allMoveTimes.push(thinkTime);
     const userUci = userMove.from + userMove.to;
     const fen = game.fen();
-
     $('#status').text('Analyzing...');
 
-    // Expected solution
-    const expFrom = expectedSolutionUCI.substring(0, 2);
-    const expTo = expectedSolutionUCI.substring(2, 4);
+    const expFrom = expectedSolutionUCI.substring(0,2);
+    const expTo = expectedSolutionUCI.substring(2,4);
     const expPromo = expectedSolutionUCI.length > 4 ? expectedSolutionUCI[4] : null;
-
     const tmp = new Chess(fen);
-    const bestSan = tmp.move({ from: expFrom, to: expTo, promotion: expPromo || 'q' });
+    const bestSan = tmp.move({from:expFrom,to:expTo,promotion:expPromo||'q'});
     let bestMoveText = bestSan ? bestSan.san : '';
-
     const isMatch = (userMove.from === expFrom && userMove.to === expTo);
 
     let accuracyScore = 0, accuracyText = '', accuracyColor = '';
@@ -425,255 +421,194 @@ async function scoreMove(userMove) {
     if (isMatch) {
         accuracyScore = 10; accuracyText = '🎯 Best move!'; accuracyColor = 'var(--green)'; bestMoveText = '';
     } else {
-        // Try cloud eval
         let evalDone = false;
         try {
-            const resp = await fetch(`https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(fen)}&multiPv=5`);
+            const ctrl = new AbortController();
+            const t = setTimeout(()=>ctrl.abort(), 5000);
+            const resp = await fetch(`https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(fen)}&multiPv=5`,{signal:ctrl.signal});
+            clearTimeout(t);
             if (!resp.ok) throw new Error('no eval');
             const data = await resp.json();
             const pvs = data.pvs || [];
             if (pvs.length === 0) throw new Error('empty');
-
-            const bestEval = pvs[0].cp ?? (pvs[0].mate ? pvs[0].mate * 10000 : 0);
+            const bestEval = pvs[0].cp ?? (pvs[0].mate ? pvs[0].mate*10000 : 0);
             const userPv = pvs.find(p => p.moves && p.moves.startsWith(userUci));
-
             if (userPv) {
-                const uEval = userPv.cp ?? (userPv.mate ? userPv.mate * 10000 : 0);
-                const diff = Math.abs(bestEval - uEval);
-
-                if (diff === 0)       { accuracyScore = 10; accuracyText = '🎯 Engine best!';   accuracyColor = 'var(--green)'; bestMoveText = ''; }
-                else if (diff <= 15)  { accuracyScore = 9;  accuracyText = '🎯 Excellent';      accuracyColor = 'var(--green)'; }
-                else if (diff <= 40)  { accuracyScore = 8;  accuracyText = '✅ Very strong';     accuracyColor = 'var(--green)'; }
-                else if (diff <= 70)  { accuracyScore = 7;  accuracyText = '✅ Good';            accuracyColor = 'var(--green)'; }
-                else if (diff <= 120) { accuracyScore = 5;  accuracyText = '👍 OK move';         accuracyColor = 'var(--accent)'; }
-                else if (diff <= 200) { accuracyScore = 4;  accuracyText = '⚡ Mediocre';        accuracyColor = 'var(--accent)'; }
-                else if (diff <= 350) { accuracyScore = 2;  accuracyText = '⚠️ Mistake';        accuracyColor = 'var(--orange)'; }
-                else                  { accuracyScore = 1;  accuracyText = '💀 Blunder';         accuracyColor = 'var(--red)'; }
+                const uE = userPv.cp ?? (userPv.mate ? userPv.mate*10000 : 0);
+                const diff = Math.abs(bestEval - uE);
+                if      (diff===0)   {accuracyScore=10;accuracyText='🎯 Engine best!';accuracyColor='var(--green)';bestMoveText='';}
+                else if (diff<=15)   {accuracyScore=9; accuracyText='🎯 Excellent';accuracyColor='var(--green)';}
+                else if (diff<=40)   {accuracyScore=8; accuracyText='✅ Very strong';accuracyColor='var(--green)';}
+                else if (diff<=70)   {accuracyScore=7; accuracyText='✅ Good';accuracyColor='var(--green)';}
+                else if (diff<=120)  {accuracyScore=5; accuracyText='👍 OK move';accuracyColor='var(--accent)';}
+                else if (diff<=200)  {accuracyScore=4; accuracyText='⚡ Mediocre';accuracyColor='var(--accent)';}
+                else if (diff<=350)  {accuracyScore=2; accuracyText='⚠️ Mistake';accuracyColor='var(--orange)';}
+                else                 {accuracyScore=1; accuracyText='💀 Blunder';accuracyColor='var(--red)';}
                 evalDone = true;
             } else {
-                // Not in top 5 PVs — check the after-position
-                const afterGame = new Chess(fen);
-                afterGame.move({ from: userMove.from, to: userMove.to, promotion: 'q' });
+                // Not in top 5 — try after-position eval
+                const ag = new Chess(fen);
+                ag.move({from:userMove.from,to:userMove.to,promotion:'q'});
                 try {
-                    const aResp = await fetch(`https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(afterGame.fen())}&multiPv=1`);
-                    if (aResp.ok) {
-                        const aData = await aResp.json();
-                        const afterBest = aData.pvs?.[0]?.cp ?? 0;
-                        const sign = game.turn() === 'w' ? 1 : -1;
-                        const loss = (bestEval * sign) - (-afterBest * sign);
-                        
-                        if (loss <= 20)       { accuracyScore = 7; accuracyText = '✅ Good alternative';  accuracyColor = 'var(--green)'; }
-                        else if (loss <= 60)   { accuracyScore = 6; accuracyText = '👍 Reasonable';        accuracyColor = 'var(--accent)'; }
-                        else if (loss <= 120)  { accuracyScore = 5; accuracyText = '👍 OK';                accuracyColor = 'var(--accent)'; }
-                        else if (loss <= 200)  { accuracyScore = 3; accuracyText = '⚠️ Inaccuracy';       accuracyColor = 'var(--orange)'; }
-                        else if (loss <= 350)  { accuracyScore = 2; accuracyText = '❌ Mistake';            accuracyColor = 'var(--red)'; }
-                        else                   { accuracyScore = 1; accuracyText = '💀 Blunder';            accuracyColor = 'var(--red)'; }
+                    const c2=new AbortController(); const t2=setTimeout(()=>c2.abort(),4000);
+                    const ar = await fetch(`https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(ag.fen())}&multiPv=1`,{signal:c2.signal});
+                    clearTimeout(t2);
+                    if (ar.ok) {
+                        const ad = await ar.json();
+                        const ab = ad.pvs?.[0]?.cp ?? 0;
+                        const sign = game.turn()==='w' ? 1 : -1;
+                        const loss = (bestEval*sign) - (-ab*sign);
+                        if      (loss<=20)  {accuracyScore=7;accuracyText='✅ Good alternative';accuracyColor='var(--green)';}
+                        else if (loss<=60)  {accuracyScore=6;accuracyText='👍 Reasonable';accuracyColor='var(--accent)';}
+                        else if (loss<=120) {accuracyScore=5;accuracyText='👍 OK';accuracyColor='var(--accent)';}
+                        else if (loss<=200) {accuracyScore=3;accuracyText='⚠️ Inaccuracy';accuracyColor='var(--orange)';}
+                        else if (loss<=350) {accuracyScore=2;accuracyText='❌ Mistake';accuracyColor='var(--red)';}
+                        else                {accuracyScore=1;accuracyText='💀 Blunder';accuracyColor='var(--red)';}
                         evalDone = true;
                     }
-                } catch (_) {}
+                } catch(_){}
             }
-        } catch (_) {}
-
-        // Fallback: no cloud eval at all — use basic material check
+        } catch(_){}
         if (!evalDone) {
             accuracyScore = basicMoveCheck(fen, userMove);
-            if (accuracyScore >= 7) { accuracyText = '✅ Looks reasonable'; accuracyColor = 'var(--green)'; }
-            else if (accuracyScore >= 5) { accuracyText = '👍 Unclear — partial credit'; accuracyColor = 'var(--accent)'; }
-            else if (accuracyScore >= 3) { accuracyText = '⚠️ Dubious'; accuracyColor = 'var(--orange)'; }
-            else { accuracyText = '❌ Loses material'; accuracyColor = 'var(--red)'; }
+            if      (accuracyScore>=7) {accuracyText='✅ Looks reasonable';accuracyColor='var(--green)';}
+            else if (accuracyScore>=5) {accuracyText='👍 Unclear — partial credit';accuracyColor='var(--accent)';}
+            else if (accuracyScore>=3) {accuracyText='⚠️ Dubious';accuracyColor='var(--orange)';}
+            else                       {accuracyText='❌ Loses material';accuracyColor='var(--red)';}
         }
     }
 
-    // Speed
     const speedMult = getSpeedMultiplier(thinkTime);
     const speedInfo = getSpeedLabel(thinkTime);
     const displayScore = Math.round(accuracyScore * speedMult);
-
     if (displayScore >= 10) perfectCount++;
-    puzzlesSolved++;
-    totalPoints += displayScore;
+    puzzlesSolved++; totalPoints += displayScore;
     $('#points-acc').text(totalPoints);
 
     let pillColor = 'var(--red)';
-    if (displayScore >= 8) pillColor = 'var(--green)';
-    else if (displayScore >= 5) pillColor = 'var(--accent)';
-    else if (displayScore >= 3) pillColor = 'var(--orange)';
+    if (displayScore>=8) pillColor='var(--green)';
+    else if (displayScore>=5) pillColor='var(--accent)';
+    else if (displayScore>=3) pillColor='var(--orange)';
 
-    $('#score-pill').text(displayScore + '/10').css('color', pillColor);
+    $('#score-pill').text(displayScore+'/10').css('color',pillColor);
     $('#score-breakdown').addClass('show');
-    $('#sb-accuracy').text(accuracyScore + '/10').css('color', accuracyColor);
-    $('#sb-speed').text('×' + speedMult.toFixed(2)).css('color', speedInfo.color);
-    $('#sb-time').text(thinkTime.toFixed(1) + 's').css('color', speedInfo.color);
+    $('#sb-accuracy').text(accuracyScore+'/10').css('color',accuracyColor);
+    $('#sb-speed').text('×'+speedMult.toFixed(2)).css('color',speedInfo.color);
+    $('#sb-time').text(thinkTime.toFixed(1)+'s').css('color',speedInfo.color);
 
-    const themes = (currentPuzzle.Themes || []).filter(t => !SKIP_THEMES.has(t)).slice(0, 3).join(', ');
-    const rating = currentPuzzle.Rating || '';
-
+    const themes = (currentPuzzle.Themes||[]).filter(t=>!SKIP_THEMES.has(t)).slice(0,3).join(', ');
+    const rating = currentPuzzle.Rating||'';
     $('#feedback-container').addClass('show');
     $('#feedback').html(
-        `<span style="color:${accuracyColor}">${accuracyText}</span> &nbsp; <span style="color:${speedInfo.color}">${speedInfo.text}</span>` +
-        (bestMoveText ? `<br><span style="color:var(--text-dim);font-size:0.75rem">Best: ${bestMoveText}</span>` : '') +
-        (themes ? `<br><span style="color:var(--text-dim);font-size:0.65rem;opacity:0.5">${themes}${rating ? ' · ' + rating : ''}</span>` : '')
+        `<span style="color:${accuracyColor}">${accuracyText}</span> &nbsp; <span style="color:${speedInfo.color}">${speedInfo.text}</span>`+
+        (bestMoveText?`<br><span style="color:var(--text-dim);font-size:.75rem">Best: ${bestMoveText}</span>`:'')+
+        (themes?`<br><span style="color:var(--text-dim);font-size:.65rem;opacity:.5">${themes}${rating?' · '+rating:''}</span>`:'')
     );
     $('#status').text('Review');
-
-    if (timeLeft > 0) { $('#next-btn').addClass('show'); } else { endGame(); }
+    if (timeLeft > 0) $('#next-btn').addClass('show'); else endGame();
     ensurePuzzles();
 }
 
-// ==========================================================
+// ============================================================
 // LOAD NEXT PUZZLE
-// ==========================================================
-async function loadNextPuzzle() {
+// ============================================================
+function loadNextPuzzle() {
     if (timeLeft <= 0) { endGame(); return; }
-
-    if (puzzleQueue.length === 0) {
-        $('#status').text('Loading puzzles...');
-        $('#board-wrap').addClass('searching');
-
-        // Actively fetch, don't just poll
-        const ok = await fetchPuzzleBatch();
-        if (puzzleQueue.length === 0) {
-            // Still empty — keep retrying with backoff
-            fetchRetries++;
-            const delay = Math.min(2000, 500 * fetchRetries);
-            $('#status').text(`Retrying... (${fetchRetries})`);
-            setTimeout(() => loadNextPuzzle(), delay);
-            return;
-        }
-    }
-
-    if (puzzleQueue.length === 0) return; // safety
+    ensurePuzzles();
+    if (puzzleQueue.length === 0) { refillFromEmbedded(); }
 
     currentPuzzle = puzzleQueue.shift();
     const moves = currentPuzzle.Moves.trim().split(' ');
     expectedSolutionUCI = moves[1];
 
     if (!game.load(currentPuzzle.FEN)) { loadNextPuzzle(); return; }
-    const sFrom = moves[0].substring(0, 2), sTo = moves[0].substring(2, 4);
-    const sPromo = moves[0].length > 4 ? moves[0][4] : undefined;
-    if (!game.move({ from: sFrom, to: sTo, promotion: sPromo || 'q' })) { loadNextPuzzle(); return; }
+    const sF=moves[0].substring(0,2), sT=moves[0].substring(2,4);
+    const sP=moves[0].length>4?moves[0][4]:undefined;
+    if (!game.move({from:sF,to:sT,promotion:sP||'q'})) { loadNextPuzzle(); return; }
 
     clearSelection();
     $('#board-wrap').addClass('searching');
     $('#feedback-container').removeClass('show');
     $('#score-breakdown').removeClass('show');
     $('#next-btn').removeClass('show');
-    $('#score-pill').text('—').css('color', 'var(--accent)');
-    const bar = document.getElementById('move-timer-bar');
-    bar.style.width = '100%'; bar.style.background = 'var(--green)';
+    $('#score-pill').text('—').css('color','var(--accent)');
+    const bar=document.getElementById('move-timer-bar');
+    bar.style.width='100%';bar.style.background='var(--green)';
 
-    setTimeout(() => {
+    setTimeout(()=>{
         board.position(game.fen());
-        board.orientation(game.turn() === 'w' ? 'white' : 'black');
+        board.orientation(game.turn()==='w'?'white':'black');
         $('#board-wrap').removeClass('searching');
-        $('#status').text(game.turn() === 'w' ? 'White to move' : 'Black to move');
+        $('#status').text(game.turn()==='w'?'White to move':'Black to move');
         waitingForMove = true;
-
-        const themes = (currentPuzzle.Themes || []).slice(0, 3).join(' · ');
-        $('#puzzle-info').html(
-            `<span style="opacity:0.5">${themes}</span>` +
-            `<div class="db-badge">🔗 Lichess DB · ${puzzleQueue.length} queued</div>`
-        );
+        const th=(currentPuzzle.Themes||[]).slice(0,3).join(' · ');
+        $('#puzzle-info').html(`<span style="opacity:.5">${th}</span><div class="db-badge">🔗 ${puzzleQueue.length} queued</div>`);
         resumeTimer();
-    }, 250);
-
-    // Prefetch next batch in background
-    ensurePuzzles();
+    }, 200);
 }
 
-// ==========================================================
+// ============================================================
 // TAP-TO-MOVE
-// ==========================================================
-function findSquareEl(sq) {
-    // chessboardjs gives squares a class like "square-e4"
-    return $(`#board .square-${sq}`);
-}
+// ============================================================
+function findSquareEl(sq) { return $(`#board .square-${sq}`); }
 
 function clearSelection() {
     selectedSquare = null;
     $('#board [class*="square-"]').removeClass('highlight-square highlight-dot highlight-capture');
 }
 
-function highlightLegalMoves(square) {
-    const moves = game.moves({ square: square, verbose: true });
-    moves.forEach(m => {
-        const $sq = findSquareEl(m.to);
-        if (m.captured) $sq.addClass('highlight-capture');
-        else $sq.addClass('highlight-dot');
+function highlightLegalMoves(sq) {
+    game.moves({square:sq,verbose:true}).forEach(m => {
+        const $s = findSquareEl(m.to);
+        if (m.captured) $s.addClass('highlight-capture'); else $s.addClass('highlight-dot');
     });
 }
 
-function isOurPiece(square) {
-    const piece = game.get(square);
-    if (!piece) return false;
-    return (game.turn() === 'w' && piece.color === 'w') || (game.turn() === 'b' && piece.color === 'b');
+function isOurPiece(sq) {
+    const p = game.get(sq);
+    return p && ((game.turn()==='w'&&p.color==='w')||(game.turn()==='b'&&p.color==='b'));
 }
 
 async function handleSquareClick(square) {
     if (!isActive || !waitingForMove || timeLeft <= 0) return;
-
     if (selectedSquare === null) {
-        // Select a piece
         if (isOurPiece(square)) {
-            const moves = game.moves({ square: square, verbose: true });
-            if (moves.length > 0) {
+            const mv = game.moves({square:square,verbose:true});
+            if (mv.length > 0) {
                 selectedSquare = square;
-                clearSelection();
-                selectedSquare = square;
+                clearSelection(); selectedSquare = square;
                 findSquareEl(square).addClass('highlight-square');
                 highlightLegalMoves(square);
             }
         }
     } else {
-        // Try to move to this square
-        if (square === selectedSquare) {
-            // Deselect
-            clearSelection();
-            return;
-        }
-
-        // If clicking another own piece, reselect
+        if (square === selectedSquare) { clearSelection(); return; }
         if (isOurPiece(square)) {
-            clearSelection();
-            selectedSquare = square;
+            clearSelection(); selectedSquare = square;
             findSquareEl(square).addClass('highlight-square');
-            highlightLegalMoves(square);
-            return;
+            highlightLegalMoves(square); return;
         }
-
-        // Attempt the move
-        const move = game.move({ from: selectedSquare, to: square, promotion: 'q' });
-        if (move === null) {
-            // Illegal
-            clearSelection();
-            return;
-        }
-
-        // Valid move — undo, score, then apply
-        game.undo();
-        clearSelection();
+        const move = game.move({from:selectedSquare,to:square,promotion:'q'});
+        if (move === null) { clearSelection(); return; }
+        game.undo(); clearSelection();
         await scoreMove(move);
-        game.move({ from: move.from, to: move.to, promotion: 'q' });
+        game.move({from:move.from,to:move.to,promotion:'q'});
         board.position(game.fen());
     }
 }
 
-// ==========================================================
+// ============================================================
 // INIT
-// ==========================================================
-$(document).ready(function () {
+// ============================================================
+$(document).ready(function() {
     board = Chessboard('board', {
-        draggable: false,     // tap only
-        position: 'start',
-        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+        draggable: false, position: 'start',
+        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
     });
 
-    // Tap-to-move: clicks land on <img> pieces or square <div>s,
-    // so we walk up from the target to find the square class.
-    $('#board').on('click', function (e) {
-        let el = e.target;
-        let sq = null;
-        // Walk up from click target to find a div with class square-XX
+    // Click handler — walk up DOM to find square class
+    $('#board').on('click', function(e) {
+        let el = e.target, sq = null;
         while (el && el !== this) {
             if (el.className && typeof el.className === 'string') {
                 const m = el.className.match(/square-([a-h][1-8])/);
@@ -685,39 +620,28 @@ $(document).ready(function () {
     });
 
     $(window).resize(() => board.resize());
-    fetchPuzzleBatch().then(ok => {
-        if (!ok) setTimeout(() => fetchPuzzleBatch(), 2000); // retry once on load
-    });
+
+    // Warm up: fill queue from embedded, try API in background
+    refillFromEmbedded();
+    fetchAPIBatch();
 
     $('#next-btn').on('click', () => loadNextPuzzle());
 
-    async function startNewGame() {
-        timeLeft = 60; totalPoints = 0; puzzlesSolved = 0; perfectCount = 0;
-        allMoveTimes = []; isActive = true; timerRunning = false; waitingForMove = false;
-        fetchRetries = 0;
+    function startNewGame() {
+        timeLeft=60;totalPoints=0;puzzlesSolved=0;perfectCount=0;
+        allMoveTimes=[];isActive=true;timerRunning=false;waitingForMove=false;
         clearSelection();
-
-        $('#points-acc').text('0');
-        $('#timer').text('01:00').removeClass('low paused');
-        $('#score-pill').text('—').css('color', 'var(--accent)');
-        $('#feedback-container').removeClass('show');
-        $('#score-breakdown').removeClass('show');
-        $('#next-btn').removeClass('show');
-        $('#start-btn').addClass('hidden');
+        $('#points-acc').text('0');$('#timer').text('01:00').removeClass('low paused');
+        $('#score-pill').text('—').css('color','var(--accent)');
+        $('#feedback-container').removeClass('show');$('#score-breakdown').removeClass('show');
+        $('#next-btn').removeClass('show');$('#start-btn').addClass('hidden');
         $('#game-over-overlay').removeClass('show');
-
-        // Pre-fetch if queue is low, then start
-        if (puzzleQueue.length < 5) {
-            $('#status').text('Loading puzzles...');
-            await fetchPuzzleBatch();
-        }
+        ensurePuzzles();
         loadNextPuzzle();
     }
-
     $('#start-btn').on('click', startNewGame);
     $('#go-btn').on('click', startNewGame);
 });
 </script>
-
 </body>
 </html>
