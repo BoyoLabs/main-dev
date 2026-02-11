@@ -205,37 +205,49 @@
 // ==========================================================
 // PUZZLE DB
 // ==========================================================
-const TOTAL_PUZZLES = 5751400, BATCH_SIZE = 100;
+const TOTAL_PUZZLES = 5751400, BATCH_SIZE = 50;
 const HF_API = 'https://datasets-server.huggingface.co/rows?dataset=Lichess/chess-puzzles&config=default&split=train';
 const SKIP_THEMES = new Set(['oneMove', 'mateIn1']);
-let puzzleQueue = [], isFetching = false;
+let puzzleQueue = [], isFetching = false, fetchRetries = 0;
+
+function fetchWithTimeout(url, ms = 8000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+}
 
 async function fetchPuzzleBatch() {
-    if (isFetching) return;
+    if (isFetching) return false;
     isFetching = true;
-    try {
-        const offset = Math.floor(Math.random() * (TOTAL_PUZZLES - BATCH_SIZE));
-        const resp = await fetch(`${HF_API}&offset=${offset}&length=${BATCH_SIZE}`);
-        if (!resp.ok) throw new Error(`${resp.status}`);
-        const data = await resp.json();
-        puzzleQueue.push(...data.rows.map(r => r.row).filter(p => {
-            if ((p.Themes||[]).some(t => SKIP_THEMES.has(t))) return false;
-            return (p.Moves||'').trim().split(' ').length >= 2;
-        }));
-    } catch (e) {
+    let success = false;
+
+    for (let attempt = 0; attempt < 3 && !success; attempt++) {
         try {
-            const o2 = Math.floor(Math.random() * (TOTAL_PUZZLES - BATCH_SIZE));
-            const r2 = await fetch(`${HF_API}&offset=${o2}&length=${BATCH_SIZE}`);
-            if (r2.ok) {
-                const d2 = await r2.json();
-                puzzleQueue.push(...d2.rows.map(r => r.row).filter(p =>
-                    (p.Moves||'').trim().split(' ').length >= 2 && !(p.Themes||[]).some(t => SKIP_THEMES.has(t))
-                ));
+            const offset = Math.floor(Math.random() * (TOTAL_PUZZLES - BATCH_SIZE));
+            const resp = await fetchWithTimeout(`${HF_API}&offset=${offset}&length=${BATCH_SIZE}`, 10000);
+            if (!resp.ok) throw new Error(`${resp.status}`);
+            const data = await resp.json();
+            const puzzles = data.rows.map(r => r.row).filter(p => {
+                if ((p.Themes||[]).some(t => SKIP_THEMES.has(t))) return false;
+                return (p.Moves||'').trim().split(' ').length >= 2;
+            });
+            if (puzzles.length > 0) {
+                puzzleQueue.push(...puzzles);
+                success = true;
+                fetchRetries = 0;
+                console.log(`Fetched ${puzzles.length} puzzles. Queue: ${puzzleQueue.length}`);
             }
-        } catch (_) {}
+        } catch (e) {
+            console.warn(`Fetch attempt ${attempt + 1} failed:`, e.message);
+            // Brief pause before retry
+            await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+        }
     }
+
     isFetching = false;
+    return success;
 }
+
 function ensurePuzzles() { if (puzzleQueue.length < 15 && !isFetching) fetchPuzzleBatch(); }
 
 // ==========================================================
@@ -511,14 +523,26 @@ async function scoreMove(userMove) {
 // ==========================================================
 // LOAD NEXT PUZZLE
 // ==========================================================
-function loadNextPuzzle() {
+async function loadNextPuzzle() {
     if (timeLeft <= 0) { endGame(); return; }
+
     if (puzzleQueue.length === 0) {
         $('#status').text('Loading puzzles...');
         $('#board-wrap').addClass('searching');
-        const w = setInterval(() => { if (puzzleQueue.length > 0) { clearInterval(w); loadNextPuzzle(); } }, 200);
-        return;
+
+        // Actively fetch, don't just poll
+        const ok = await fetchPuzzleBatch();
+        if (puzzleQueue.length === 0) {
+            // Still empty — keep retrying with backoff
+            fetchRetries++;
+            const delay = Math.min(2000, 500 * fetchRetries);
+            $('#status').text(`Retrying... (${fetchRetries})`);
+            setTimeout(() => loadNextPuzzle(), delay);
+            return;
+        }
     }
+
+    if (puzzleQueue.length === 0) return; // safety
 
     currentPuzzle = puzzleQueue.shift();
     const moves = currentPuzzle.Moves.trim().split(' ');
@@ -552,6 +576,9 @@ function loadNextPuzzle() {
         );
         resumeTimer();
     }, 250);
+
+    // Prefetch next batch in background
+    ensurePuzzles();
 }
 
 // ==========================================================
@@ -658,13 +685,16 @@ $(document).ready(function () {
     });
 
     $(window).resize(() => board.resize());
-    fetchPuzzleBatch();
+    fetchPuzzleBatch().then(ok => {
+        if (!ok) setTimeout(() => fetchPuzzleBatch(), 2000); // retry once on load
+    });
 
-    $('#next-btn').on('click', loadNextPuzzle);
+    $('#next-btn').on('click', () => loadNextPuzzle());
 
-    function startNewGame() {
+    async function startNewGame() {
         timeLeft = 60; totalPoints = 0; puzzlesSolved = 0; perfectCount = 0;
         allMoveTimes = []; isActive = true; timerRunning = false; waitingForMove = false;
+        fetchRetries = 0;
         clearSelection();
 
         $('#points-acc').text('0');
@@ -676,7 +706,11 @@ $(document).ready(function () {
         $('#start-btn').addClass('hidden');
         $('#game-over-overlay').removeClass('show');
 
-        if (puzzleQueue.length < 10) fetchPuzzleBatch();
+        // Pre-fetch if queue is low, then start
+        if (puzzleQueue.length < 5) {
+            $('#status').text('Loading puzzles...');
+            await fetchPuzzleBatch();
+        }
         loadNextPuzzle();
     }
 
