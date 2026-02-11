@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bullet Positional Pro</title>
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #0c0e13; --surface: #14171e; --surface-2: #1a1e28;
+            --border: #252a36; --text: #c8cdd8; --text-dim: #6b7280;
+            --accent: #f59e0b; --accent-glow: rgba(245,158,11,0.15);
+            --green: #22c55e; --red: #ef4444; --blue: #3b82f6; --orange: #f97316;
+        }
+        body {
+            background: var(--bg); color: var(--text); font-family: 'Outfit', sans-serif;
+            min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+            padding: 20px 16px;
+            background-image:
+                radial-gradient(ellipse 600px 400px at 50% 0%, rgba(245,158,11,0.04), transparent),
+                radial-gradient(ellipse 400px 300px at 80% 100%, rgba(59,130,246,0.03), transparent);
+        }
+        header { text-align: center; margin-bottom: 16px; }
+        header h1 {
+            font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 1.5rem;
+            color: var(--accent); letter-spacing: -0.5px; text-transform: uppercase;
+        }
+        header h1 span { color: var(--text); font-weight: 400; opacity: 0.5; }
+        header p { font-size: 0.7rem; color: var(--text-dim); margin-top: 2px; letter-spacing: 2px; text-transform: uppercase; }
+        .app { width: 100%; max-width: 420px; }
+        .top-bar { display: flex; justify-content: space-between; align-items: flex-end; padding: 0 4px; margin-bottom: 8px; }
+        .timer { font-family: 'JetBrains Mono', monospace; font-size: 2.4rem; font-weight: 800; color: #fff; line-height: 1; }
+        .timer.low { color: var(--red); animation: pulse 0.8s ease-in-out infinite; }
+        .timer.paused { color: var(--blue); opacity: 0.7; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        .score-total { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--text-dim); text-align: right; }
+        .score-total strong { display: block; font-size: 1.5rem; color: var(--accent); line-height: 1; }
+
+        .board-wrap {
+            border-radius: 8px; overflow: hidden; border: 3px solid var(--border);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5); transition: filter 0.3s, opacity 0.3s;
+        }
+        .board-wrap.searching { filter: grayscale(0.8) blur(2px); opacity: 0.5; pointer-events: none; }
+        #board { width: 100%; cursor: pointer; user-select: none; -webkit-user-select: none; }
+        #board img { pointer-events: none; }
+
+        /* Tap-to-move highlights */
+        .highlight-square { background-color: rgba(245,158,11,0.4) !important; }
+        .highlight-dot { position: relative !important; }
+        .highlight-dot::after {
+            content: ''; position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 28%; height: 28%;
+            background: rgba(245,158,11,0.5); border-radius: 50%;
+            pointer-events: none; z-index: 10;
+        }
+        .highlight-capture { 
+            background: radial-gradient(transparent 50%, rgba(239,68,68,0.4) 50%) !important;
+        }
+
+        /* Move timer bar */
+        .move-timer-wrap { height: 3px; background: var(--bg); overflow: hidden; border-radius: 0 0 8px 8px; margin-top: -3px; }
+        .move-timer-bar { height: 100%; width: 100%; border-radius: 0 0 8px 8px; transition: width 0.1s linear, background-color 0.5s; }
+
+        .panel { margin-top: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+        .status-line {
+            text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+            font-weight: 700; color: var(--accent); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px;
+        }
+        .score-row { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+        .score-row label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+        .score-pill {
+            font-family: 'JetBrains Mono', monospace; font-size: 1.6rem; font-weight: 800;
+            color: var(--accent); background: var(--bg); padding: 4px 16px; border-radius: 6px;
+        }
+
+        .score-breakdown { display: none; margin-bottom: 12px; }
+        .score-breakdown.show { display: flex; gap: 8px; }
+        .sb-item { flex: 1; text-align: center; padding: 8px 4px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; }
+        .sb-item .sb-label { font-size: 0.55rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+        .sb-item .sb-val { font-size: 1rem; font-weight: 800; }
+
+        .feedback-box { display: none; margin-bottom: 12px; }
+        .feedback-box.show { display: block; }
+        .feedback-inner {
+            font-size: 0.85rem; color: var(--text); background: var(--surface-2);
+            padding: 10px 14px; border-radius: 8px; border-left: 3px solid var(--accent); line-height: 1.5;
+        }
+        .next-btn {
+            display: none; width: 100%; padding: 12px; background: var(--blue); color: #fff;
+            border: none; border-radius: 8px; font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem; font-weight: 700; cursor: pointer; text-transform: uppercase;
+            letter-spacing: 1px; transition: background 0.2s; margin-bottom: 8px;
+        }
+        .next-btn:hover { background: #2563eb; }
+        .next-btn.show { display: block; }
+        .start-btn {
+            width: 100%; padding: 16px; background: var(--accent); color: var(--bg); border: none;
+            border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 1rem;
+            font-weight: 800; cursor: pointer; text-transform: uppercase; letter-spacing: 2px;
+            transition: all 0.15s; box-shadow: 0 4px 20px var(--accent-glow);
+        }
+        .start-btn:hover { background: #eab308; transform: translateY(-1px); }
+        .start-btn:active { transform: scale(0.98); }
+        .start-btn.hidden { display: none; }
+
+        /* GAME OVER OVERLAY */
+        .game-over-overlay {
+            display: none; position: fixed; inset: 0; z-index: 1000;
+            background: rgba(12,14,19,0.94); backdrop-filter: blur(12px);
+            flex-direction: column; align-items: center; justify-content: center; padding: 24px;
+        }
+        .game-over-overlay.show { display: flex; }
+        .go-card {
+            background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+            padding: 32px 28px; max-width: 380px; width: 100%; text-align: center;
+            box-shadow: 0 40px 80px rgba(0,0,0,0.5); animation: slideUp 0.4s ease-out;
+        }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        .go-title { font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 0.8rem; color: var(--red); letter-spacing: 4px; text-transform: uppercase; margin-bottom: 8px; }
+        .go-score { font-family: 'JetBrains Mono', monospace; font-size: 4rem; font-weight: 800; color: var(--accent); line-height: 1; }
+        .go-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; margin-bottom: 20px; }
+        .go-stats { display: flex; gap: 12px; margin-bottom: 24px; }
+        .go-stat { flex: 1; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 8px; text-align: center; }
+        .go-stat .go-stat-val { font-family: 'JetBrains Mono', monospace; font-size: 1.3rem; font-weight: 800; color: #fff; }
+        .go-stat .go-stat-label { font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+        .go-grade { font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 700; padding: 8px 16px; border-radius: 8px; display: inline-block; margin-bottom: 20px; }
+        .go-btn {
+            width: 100%; padding: 16px; background: var(--accent); color: var(--bg); border: none;
+            border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 1rem;
+            font-weight: 800; cursor: pointer; text-transform: uppercase; letter-spacing: 2px;
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+        .go-btn:hover { background: #eab308; }
+
+        .puzzle-info { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--text-dim); text-align: center; margin-top: 8px; }
+        .db-badge { display: inline-block; background: var(--surface-2); border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px; margin-top: 4px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Bullet Positional <span>//</span> Pro</h1>
+    <p>60 seconds · pure intuition</p>
+</header>
+
+<div class="app">
+    <div class="top-bar">
+        <div class="timer" id="timer">01:00</div>
+        <div class="score-total">pts<strong id="points-acc">0</strong></div>
+    </div>
+
+    <div class="board-wrap" id="board-wrap">
+        <div id="board"></div>
+    </div>
+    <div class="move-timer-wrap">
+        <div class="move-timer-bar" id="move-timer-bar" style="background:var(--green)"></div>
+    </div>
+
+    <div class="panel">
+        <div class="status-line" id="status">Press Start</div>
+        <div class="score-row">
+            <label>Move Score</label>
+            <div class="score-pill" id="score-pill">—</div>
+        </div>
+        <div class="score-breakdown" id="score-breakdown">
+            <div class="sb-item"><div class="sb-label">Accuracy</div><div class="sb-val" id="sb-accuracy">—</div></div>
+            <div class="sb-item"><div class="sb-label">Speed</div><div class="sb-val" id="sb-speed">—</div></div>
+            <div class="sb-item"><div class="sb-label">Time</div><div class="sb-val" id="sb-time">—</div></div>
+        </div>
+        <div class="feedback-box" id="feedback-container">
+            <div class="feedback-inner" id="feedback"></div>
+        </div>
+        <button class="next-btn" id="next-btn">Next Position →</button>
+        <button class="start-btn" id="start-btn">Start Bullet Run</button>
+    </div>
+    <div class="puzzle-info" id="puzzle-info">
+        <div class="db-badge">🔗 Lichess Database · 5.7M puzzles</div>
+    </div>
+</div>
+
+<!-- GAME OVER -->
+<div class="game-over-overlay" id="game-over-overlay">
+    <div class="go-card">
+        <div class="go-title">⏱ Time's Up</div>
+        <div class="go-score" id="go-score">0</div>
+        <div class="go-label">total points</div>
+        <div class="go-grade" id="go-grade"></div>
+        <div class="go-stats">
+            <div class="go-stat"><div class="go-stat-val" id="go-puzzles">0</div><div class="go-stat-label">Puzzles</div></div>
+            <div class="go-stat"><div class="go-stat-val" id="go-avg">0</div><div class="go-stat-label">Avg Score</div></div>
+            <div class="go-stat"><div class="go-stat-val" id="go-avg-time">0s</div><div class="go-stat-label">Avg Time</div></div>
+            <div class="go-stat"><div class="go-stat-val" id="go-perfect">0</div><div class="go-stat-label">Perfects</div></div>
+        </div>
+        <button class="go-btn" id="go-btn">Play Again</button>
+    </div>
+</div>
+
+<script>
+// ==========================================================
+// PUZZLE DB
+// ==========================================================
+const TOTAL_PUZZLES = 5751400, BATCH_SIZE = 100;
+const HF_API = 'https://datasets-server.huggingface.co/rows?dataset=Lichess/chess-puzzles&config=default&split=train';
+const SKIP_THEMES = new Set(['oneMove', 'mateIn1']);
+let puzzleQueue = [], isFetching = false;
+
+async function fetchPuzzleBatch() {
+    if (isFetching) return;
+    isFetching = true;
+    try {
+        const offset = Math.floor(Math.random() * (TOTAL_PUZZLES - BATCH_SIZE));
+        const resp = await fetch(`${HF_API}&offset=${offset}&length=${BATCH_SIZE}`);
+        if (!resp.ok) throw new Error(`${resp.status}`);
+        const data = await resp.json();
+        puzzleQueue.push(...data.rows.map(r => r.row).filter(p => {
+            if ((p.Themes||[]).some(t => SKIP_THEMES.has(t))) return false;
+            return (p.Moves||'').trim().split(' ').length >= 2;
+        }));
+    } catch (e) {
+        try {
+            const o2 = Math.floor(Math.random() * (TOTAL_PUZZLES - BATCH_SIZE));
+            const r2 = await fetch(`${HF_API}&offset=${o2}&length=${BATCH_SIZE}`);
+            if (r2.ok) {
+                const d2 = await r2.json();
+                puzzleQueue.push(...d2.rows.map(r => r.row).filter(p =>
+                    (p.Moves||'').trim().split(' ').length >= 2 && !(p.Themes||[]).some(t => SKIP_THEMES.has(t))
+                ));
+            }
+        } catch (_) {}
+    }
+    isFetching = false;
+}
+function ensurePuzzles() { if (puzzleQueue.length < 15 && !isFetching) fetchPuzzleBatch(); }
+
+// ==========================================================
+// STATE
+// ==========================================================
+let board = null, game = new Chess();
+let timeLeft = 60, timerInterval = null;
+let totalPoints = 0, puzzlesSolved = 0, perfectCount = 0;
+let isActive = false, timerRunning = false;
+let currentPuzzle = null, expectedSolutionUCI = null;
+let moveStartTime = 0, moveTimerRAF = null, allMoveTimes = [];
+let selectedSquare = null; // for tap-to-move
+let waitingForMove = false; // block input during analysis
+
+const MAX_THINK_SECONDS = 12;
+
+// ==========================================================
+// SPEED — steeper curve, bullet is brutal
+// ==========================================================
+function getSpeedMultiplier(sec) {
+    if (sec <= 1.5) return 1.0;   // Premove-tier
+    if (sec <= 3)   return 0.85;  // Fast
+    if (sec <= 5)   return 0.65;  // Normal
+    if (sec <= 7)   return 0.45;  // Slow
+    if (sec <= 10)  return 0.25;  // Very slow
+    return 0.1;                    // Flagworthy
+}
+function getSpeedLabel(sec) {
+    if (sec <= 1.5) return { text: '⚡ Premove',  color: 'var(--green)' };
+    if (sec <= 3)   return { text: '🏃 Fast',     color: 'var(--green)' };
+    if (sec <= 5)   return { text: '👍 OK',       color: 'var(--accent)' };
+    if (sec <= 7)   return { text: '🐌 Slow',     color: 'var(--orange)' };
+    if (sec <= 10)  return { text: '🧊 Glacial',  color: 'var(--red)' };
+    return            { text: '💀 Flagged',  color: 'var(--red)' };
+}
+
+// ==========================================================
+// MOVE TIMER BAR
+// ==========================================================
+function startMoveTimer() {
+    moveStartTime = performance.now();
+    const bar = document.getElementById('move-timer-bar');
+    bar.style.width = '100%';
+    function tick() {
+        const elapsed = (performance.now() - moveStartTime) / 1000;
+        const pct = Math.max(0, 1 - elapsed / MAX_THINK_SECONDS) * 100;
+        bar.style.width = pct + '%';
+        if (pct > 50) bar.style.background = 'var(--green)';
+        else if (pct > 25) bar.style.background = 'var(--orange)';
+        else bar.style.background = 'var(--red)';
+        if (pct > 0 && isActive && timerRunning) moveTimerRAF = requestAnimationFrame(tick);
+    }
+    moveTimerRAF = requestAnimationFrame(tick);
+}
+function stopMoveTimer() { if (moveTimerRAF) cancelAnimationFrame(moveTimerRAF); moveTimerRAF = null; }
+
+// ==========================================================
+// CLOCK
+// ==========================================================
+function updateTimerDisplay() {
+    const m = Math.floor(timeLeft / 60), s = timeLeft % 60;
+    $('#timer').text(`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
+    $('#timer').toggleClass('low', timeLeft <= 10);
+}
+function pauseTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = null; timerRunning = false;
+    $('#timer').addClass('paused');
+    stopMoveTimer();
+}
+function resumeTimer() {
+    if (timerRunning || timeLeft <= 0) return;
+    $('#timer').removeClass('paused');
+    timerRunning = true;
+    timerInterval = setInterval(() => {
+        timeLeft--; updateTimerDisplay();
+        if (timeLeft <= 0) { clearInterval(timerInterval); timerInterval = null; timerRunning = false; isActive = false; endGame(); }
+    }, 1000);
+    startMoveTimer();
+}
+
+// ==========================================================
+// GAME OVER
+// ==========================================================
+function endGame() {
+    isActive = false; pauseTimer(); waitingForMove = false;
+    clearSelection();
+    const avg = puzzlesSolved > 0 ? (totalPoints / puzzlesSolved).toFixed(1) : '0';
+    const avgTime = allMoveTimes.length > 0
+        ? (allMoveTimes.reduce((a,b) => a+b, 0) / allMoveTimes.length).toFixed(1) + 's' : '—';
+
+    const avgN = puzzlesSolved > 0 ? totalPoints / puzzlesSolved : 0;
+    let grade, gc, gb;
+    if (avgN >= 8.5)      { grade = 'GM Intuition';    gc = '#22c55e'; gb = 'rgba(34,197,94,0.12)'; }
+    else if (avgN >= 7)   { grade = 'Strong Instinct'; gc = '#22c55e'; gb = 'rgba(34,197,94,0.08)'; }
+    else if (avgN >= 5.5) { grade = 'Club Player';     gc = '#f59e0b'; gb = 'rgba(245,158,11,0.1)'; }
+    else if (avgN >= 4)   { grade = 'Work To Do';      gc = '#f97316'; gb = 'rgba(249,115,22,0.1)'; }
+    else if (avgN >= 2.5) { grade = 'Rough Session';   gc = '#ef4444'; gb = 'rgba(239,68,68,0.1)'; }
+    else                  { grade = 'Bullet Blunder';  gc = '#ef4444'; gb = 'rgba(239,68,68,0.12)'; }
+
+    $('#go-score').text(totalPoints); $('#go-puzzles').text(puzzlesSolved);
+    $('#go-avg').text(avg); $('#go-avg-time').text(avgTime); $('#go-perfect').text(perfectCount);
+    $('#go-grade').text(grade).css({ color: gc, background: gb, border: `1px solid ${gc}33` });
+    $('#game-over-overlay').addClass('show');
+}
+
+// ==========================================================
+// SCORING — accuracy (0-10) × speed multiplier
+//
+// Key fix: if cloud eval is unavailable, do a basic material
+// check via chess.js to distinguish "reasonable" from "blunder"
+// instead of blanket 1/10.
+// ==========================================================
+function basicMoveCheck(fen, move) {
+    // Quick sanity: does this move hang major material or walk into mate?
+    const g = new Chess(fen);
+    const m = g.move({ from: move.from, to: move.to, promotion: 'q' });
+    if (!m) return 3; // illegal somehow
+
+    // Check if opponent has mate after our move
+    if (g.in_checkmate()) return 9; // we delivered checkmate!
+    
+    const responses = g.moves({ verbose: true });
+    // Do any responses capture something valuable?
+    const captured = m.captured;
+    let worstLoss = 0;
+    const pieceVal = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+    
+    for (const resp of responses) {
+        if (resp.captured) {
+            const val = pieceVal[resp.captured] || 0;
+            if (val > worstLoss) worstLoss = val;
+        }
+    }
+
+    // If we captured something, offset
+    const capturedVal = captured ? (pieceVal[captured] || 0) : 0;
+    const netExposure = worstLoss - capturedVal;
+
+    // Check: did we give check?
+    // Undo and re-check
+    const isCheck = m.san.includes('+') || m.san.includes('#');
+
+    if (isCheck) return 6; // at least aggressive
+    if (netExposure >= 5) return 2;  // hanging queen or rook
+    if (netExposure >= 3) return 3;  // hanging minor piece
+    if (netExposure >= 1) return 4;  // hanging pawn
+    return 5; // looks reasonable
+}
+
+async function scoreMove(userMove) {
+    pauseTimer();
+    waitingForMove = false;
+
+    const thinkTime = (performance.now() - moveStartTime) / 1000;
+    allMoveTimes.push(thinkTime);
+    const userUci = userMove.from + userMove.to;
+    const fen = game.fen();
+
+    $('#status').text('Analyzing...');
+
+    // Expected solution
+    const expFrom = expectedSolutionUCI.substring(0, 2);
+    const expTo = expectedSolutionUCI.substring(2, 4);
+    const expPromo = expectedSolutionUCI.length > 4 ? expectedSolutionUCI[4] : null;
+
+    const tmp = new Chess(fen);
+    const bestSan = tmp.move({ from: expFrom, to: expTo, promotion: expPromo || 'q' });
+    let bestMoveText = bestSan ? bestSan.san : '';
+
+    const isMatch = (userMove.from === expFrom && userMove.to === expTo);
+
+    let accuracyScore = 0, accuracyText = '', accuracyColor = '';
+
+    if (isMatch) {
+        accuracyScore = 10; accuracyText = '🎯 Best move!'; accuracyColor = 'var(--green)'; bestMoveText = '';
+    } else {
+        // Try cloud eval
+        let evalDone = false;
+        try {
+            const resp = await fetch(`https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(fen)}&multiPv=5`);
+            if (!resp.ok) throw new Error('no eval');
+            const data = await resp.json();
+            const pvs = data.pvs || [];
+            if (pvs.length === 0) throw new Error('empty');
+
+            const bestEval = pvs[0].cp ?? (pvs[0].mate ? pvs[0].mate * 10000 : 0);
+            const userPv = pvs.find(p => p.moves && p.moves.startsWith(userUci));
+
+            if (userPv) {
+                const uEval = userPv.cp ?? (userPv.mate ? userPv.mate * 10000 : 0);
+                const diff = Math.abs(bestEval - uEval);
+
+                if (diff === 0)       { accuracyScore = 10; accuracyText = '🎯 Engine best!';   accuracyColor = 'var(--green)'; bestMoveText = ''; }
+                else if (diff <= 15)  { accuracyScore = 9;  accuracyText = '🎯 Excellent';      accuracyColor = 'var(--green)'; }
+                else if (diff <= 40)  { accuracyScore = 8;  accuracyText = '✅ Very strong';     accuracyColor = 'var(--green)'; }
+                else if (diff <= 70)  { accuracyScore = 7;  accuracyText = '✅ Good';            accuracyColor = 'var(--green)'; }
+                else if (diff <= 120) { accuracyScore = 5;  accuracyText = '👍 OK move';         accuracyColor = 'var(--accent)'; }
+                else if (diff <= 200) { accuracyScore = 4;  accuracyText = '⚡ Mediocre';        accuracyColor = 'var(--accent)'; }
+                else if (diff <= 350) { accuracyScore = 2;  accuracyText = '⚠️ Mistake';        accuracyColor = 'var(--orange)'; }
+                else                  { accuracyScore = 1;  accuracyText = '💀 Blunder';         accuracyColor = 'var(--red)'; }
+                evalDone = true;
+            } else {
+                // Not in top 5 PVs — check the after-position
+                const afterGame = new Chess(fen);
+                afterGame.move({ from: userMove.from, to: userMove.to, promotion: 'q' });
+                try {
+                    const aResp = await fetch(`https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(afterGame.fen())}&multiPv=1`);
+                    if (aResp.ok) {
+                        const aData = await aResp.json();
+                        const afterBest = aData.pvs?.[0]?.cp ?? 0;
+                        const sign = game.turn() === 'w' ? 1 : -1;
+                        const loss = (bestEval * sign) - (-afterBest * sign);
+                        
+                        if (loss <= 20)       { accuracyScore = 7; accuracyText = '✅ Good alternative';  accuracyColor = 'var(--green)'; }
+                        else if (loss <= 60)   { accuracyScore = 6; accuracyText = '👍 Reasonable';        accuracyColor = 'var(--accent)'; }
+                        else if (loss <= 120)  { accuracyScore = 5; accuracyText = '👍 OK';                accuracyColor = 'var(--accent)'; }
+                        else if (loss <= 200)  { accuracyScore = 3; accuracyText = '⚠️ Inaccuracy';       accuracyColor = 'var(--orange)'; }
+                        else if (loss <= 350)  { accuracyScore = 2; accuracyText = '❌ Mistake';            accuracyColor = 'var(--red)'; }
+                        else                   { accuracyScore = 1; accuracyText = '💀 Blunder';            accuracyColor = 'var(--red)'; }
+                        evalDone = true;
+                    }
+                } catch (_) {}
+            }
+        } catch (_) {}
+
+        // Fallback: no cloud eval at all — use basic material check
+        if (!evalDone) {
+            accuracyScore = basicMoveCheck(fen, userMove);
+            if (accuracyScore >= 7) { accuracyText = '✅ Looks reasonable'; accuracyColor = 'var(--green)'; }
+            else if (accuracyScore >= 5) { accuracyText = '👍 Unclear — partial credit'; accuracyColor = 'var(--accent)'; }
+            else if (accuracyScore >= 3) { accuracyText = '⚠️ Dubious'; accuracyColor = 'var(--orange)'; }
+            else { accuracyText = '❌ Loses material'; accuracyColor = 'var(--red)'; }
+        }
+    }
+
+    // Speed
+    const speedMult = getSpeedMultiplier(thinkTime);
+    const speedInfo = getSpeedLabel(thinkTime);
+    const displayScore = Math.round(accuracyScore * speedMult);
+
+    if (displayScore >= 10) perfectCount++;
+    puzzlesSolved++;
+    totalPoints += displayScore;
+    $('#points-acc').text(totalPoints);
+
+    let pillColor = 'var(--red)';
+    if (displayScore >= 8) pillColor = 'var(--green)';
+    else if (displayScore >= 5) pillColor = 'var(--accent)';
+    else if (displayScore >= 3) pillColor = 'var(--orange)';
+
+    $('#score-pill').text(displayScore + '/10').css('color', pillColor);
+    $('#score-breakdown').addClass('show');
+    $('#sb-accuracy').text(accuracyScore + '/10').css('color', accuracyColor);
+    $('#sb-speed').text('×' + speedMult.toFixed(2)).css('color', speedInfo.color);
+    $('#sb-time').text(thinkTime.toFixed(1) + 's').css('color', speedInfo.color);
+
+    const themes = (currentPuzzle.Themes || []).filter(t => !SKIP_THEMES.has(t)).slice(0, 3).join(', ');
+    const rating = currentPuzzle.Rating || '';
+
+    $('#feedback-container').addClass('show');
+    $('#feedback').html(
+        `<span style="color:${accuracyColor}">${accuracyText}</span> &nbsp; <span style="color:${speedInfo.color}">${speedInfo.text}</span>` +
+        (bestMoveText ? `<br><span style="color:var(--text-dim);font-size:0.75rem">Best: ${bestMoveText}</span>` : '') +
+        (themes ? `<br><span style="color:var(--text-dim);font-size:0.65rem;opacity:0.5">${themes}${rating ? ' · ' + rating : ''}</span>` : '')
+    );
+    $('#status').text('Review');
+
+    if (timeLeft > 0) { $('#next-btn').addClass('show'); } else { endGame(); }
+    ensurePuzzles();
+}
+
+// ==========================================================
+// LOAD NEXT PUZZLE
+// ==========================================================
+function loadNextPuzzle() {
+    if (timeLeft <= 0) { endGame(); return; }
+    if (puzzleQueue.length === 0) {
+        $('#status').text('Loading puzzles...');
+        $('#board-wrap').addClass('searching');
+        const w = setInterval(() => { if (puzzleQueue.length > 0) { clearInterval(w); loadNextPuzzle(); } }, 200);
+        return;
+    }
+
+    currentPuzzle = puzzleQueue.shift();
+    const moves = currentPuzzle.Moves.trim().split(' ');
+    expectedSolutionUCI = moves[1];
+
+    if (!game.load(currentPuzzle.FEN)) { loadNextPuzzle(); return; }
+    const sFrom = moves[0].substring(0, 2), sTo = moves[0].substring(2, 4);
+    const sPromo = moves[0].length > 4 ? moves[0][4] : undefined;
+    if (!game.move({ from: sFrom, to: sTo, promotion: sPromo || 'q' })) { loadNextPuzzle(); return; }
+
+    clearSelection();
+    $('#board-wrap').addClass('searching');
+    $('#feedback-container').removeClass('show');
+    $('#score-breakdown').removeClass('show');
+    $('#next-btn').removeClass('show');
+    $('#score-pill').text('—').css('color', 'var(--accent)');
+    const bar = document.getElementById('move-timer-bar');
+    bar.style.width = '100%'; bar.style.background = 'var(--green)';
+
+    setTimeout(() => {
+        board.position(game.fen());
+        board.orientation(game.turn() === 'w' ? 'white' : 'black');
+        $('#board-wrap').removeClass('searching');
+        $('#status').text(game.turn() === 'w' ? 'White to move' : 'Black to move');
+        waitingForMove = true;
+
+        const themes = (currentPuzzle.Themes || []).slice(0, 3).join(' · ');
+        $('#puzzle-info').html(
+            `<span style="opacity:0.5">${themes}</span>` +
+            `<div class="db-badge">🔗 Lichess DB · ${puzzleQueue.length} queued</div>`
+        );
+        resumeTimer();
+    }, 250);
+}
+
+// ==========================================================
+// TAP-TO-MOVE
+// ==========================================================
+function findSquareEl(sq) {
+    // chessboardjs gives squares a class like "square-e4"
+    return $(`#board .square-${sq}`);
+}
+
+function clearSelection() {
+    selectedSquare = null;
+    $('#board [class*="square-"]').removeClass('highlight-square highlight-dot highlight-capture');
+}
+
+function highlightLegalMoves(square) {
+    const moves = game.moves({ square: square, verbose: true });
+    moves.forEach(m => {
+        const $sq = findSquareEl(m.to);
+        if (m.captured) $sq.addClass('highlight-capture');
+        else $sq.addClass('highlight-dot');
+    });
+}
+
+function isOurPiece(square) {
+    const piece = game.get(square);
+    if (!piece) return false;
+    return (game.turn() === 'w' && piece.color === 'w') || (game.turn() === 'b' && piece.color === 'b');
+}
+
+async function handleSquareClick(square) {
+    if (!isActive || !waitingForMove || timeLeft <= 0) return;
+
+    if (selectedSquare === null) {
+        // Select a piece
+        if (isOurPiece(square)) {
+            const moves = game.moves({ square: square, verbose: true });
+            if (moves.length > 0) {
+                selectedSquare = square;
+                clearSelection();
+                selectedSquare = square;
+                findSquareEl(square).addClass('highlight-square');
+                highlightLegalMoves(square);
+            }
+        }
+    } else {
+        // Try to move to this square
+        if (square === selectedSquare) {
+            // Deselect
+            clearSelection();
+            return;
+        }
+
+        // If clicking another own piece, reselect
+        if (isOurPiece(square)) {
+            clearSelection();
+            selectedSquare = square;
+            findSquareEl(square).addClass('highlight-square');
+            highlightLegalMoves(square);
+            return;
+        }
+
+        // Attempt the move
+        const move = game.move({ from: selectedSquare, to: square, promotion: 'q' });
+        if (move === null) {
+            // Illegal
+            clearSelection();
+            return;
+        }
+
+        // Valid move — undo, score, then apply
+        game.undo();
+        clearSelection();
+        await scoreMove(move);
+        game.move({ from: move.from, to: move.to, promotion: 'q' });
+        board.position(game.fen());
+    }
+}
+
+// ==========================================================
+// INIT
+// ==========================================================
+$(document).ready(function () {
+    board = Chessboard('board', {
+        draggable: false,     // tap only
+        position: 'start',
+        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+    });
+
+    // Tap-to-move: clicks land on <img> pieces or square <div>s,
+    // so we walk up from the target to find the square class.
+    $('#board').on('click', function (e) {
+        let el = e.target;
+        let sq = null;
+        // Walk up from click target to find a div with class square-XX
+        while (el && el !== this) {
+            if (el.className && typeof el.className === 'string') {
+                const m = el.className.match(/square-([a-h][1-8])/);
+                if (m) { sq = m[1]; break; }
+            }
+            el = el.parentElement;
+        }
+        if (sq) handleSquareClick(sq);
+    });
+
+    $(window).resize(() => board.resize());
+    fetchPuzzleBatch();
+
+    $('#next-btn').on('click', loadNextPuzzle);
+
+    function startNewGame() {
+        timeLeft = 60; totalPoints = 0; puzzlesSolved = 0; perfectCount = 0;
+        allMoveTimes = []; isActive = true; timerRunning = false; waitingForMove = false;
+        clearSelection();
+
+        $('#points-acc').text('0');
+        $('#timer').text('01:00').removeClass('low paused');
+        $('#score-pill').text('—').css('color', 'var(--accent)');
+        $('#feedback-container').removeClass('show');
+        $('#score-breakdown').removeClass('show');
+        $('#next-btn').removeClass('show');
+        $('#start-btn').addClass('hidden');
+        $('#game-over-overlay').removeClass('show');
+
+        if (puzzleQueue.length < 10) fetchPuzzleBatch();
+        loadNextPuzzle();
+    }
+
+    $('#start-btn').on('click', startNewGame);
+    $('#go-btn').on('click', startNewGame);
+});
+</script>
+
+</body>
+</html>
