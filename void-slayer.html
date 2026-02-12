@@ -111,6 +111,21 @@
 
         .trophy-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9998; background: rgba(10,10,15,0.98); border: 2px solid #444; padding: 25px 35px; text-align: center; min-width: 250px; max-width: 90vw; animation: toastIn 0.2s ease; box-shadow: 0 0 40px rgba(0,0,0,0.8); }
 
+        /* Locked avatar styling */
+        .avatar-option.avatar-locked { opacity: 0.35; cursor: not-allowed; position: relative; }
+        .avatar-option.avatar-locked:hover { border-color: #555; background: #111; transform: none; }
+        .avatar-option .avatar-lock-tooltip { display: none; position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%); font-size: 0.6rem; color: #ff6666; white-space: nowrap; background: #0a0a0a; padding: 2px 6px; border: 1px solid #333; z-index: 5; }
+        .avatar-option.avatar-locked:hover .avatar-lock-tooltip { display: block; }
+
+        /* Daily Quest styling */
+        .quest-card { background: #0a0a0a; border: 1px solid #333; padding: 12px 15px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .quest-card.quest-complete { border-color: #44ff44; background: rgba(0,40,0,0.3); }
+        .quest-progress-bar { background: #222; height: 8px; border: 1px solid #444; flex: 1; min-width: 80px; max-width: 200px; position: relative; overflow: hidden; }
+        .quest-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #ff8800); transition: width 0.3s; }
+
+        /* Void Entity glow */
+        .boss-card.void-entity-card { border-color: #ff8800; box-shadow: 0 0 15px rgba(255,136,0,0.15); }
+
     </style>
 </head>
 <body>
@@ -182,6 +197,7 @@
     <h2 style="color:var(--accent)">VOID SLAYER</h2>
     <div class="nav-link" onclick="goTab('grind')">The Frontier</div>
     <div class="nav-link" onclick="goTab('bosses'); refreshBossUI();">Bosses</div>
+    <div class="nav-link" onclick="goTab('quests'); refreshQuestsUI();">Daily Quests</div>
     <div class="nav-link" onclick="goTab('pvp'); refreshPvpTargets();">The Arena</div>
     <div class="nav-link" onclick="goTab('guild'); refreshGuildUI();">Guild Hall</div>
     <div class="nav-link" onclick="goTab('wars'); refreshWarsUI();">Guild Wars</div>
@@ -208,7 +224,7 @@
         <span>XP <span class="stat-val" id="stat-xp">0</span>/<span id="stat-xp-next">100</span></span>
         <span>HP <span class="stat-val" id="stat-hp">100</span>/<span id="stat-maxhp">100</span></span>
         <span>STR <span class="stat-val" id="stat-str">10</span></span>
-        <span>WIS <span class="stat-val" id="stat-wis">10</span></span>
+        <span title="Global XP Multiplier">WIS <span class="stat-val" id="stat-wis">10</span> <span id="stat-wis-mult" style="color:#888; font-size:0.75rem;"></span></span>
         <span style="color:var(--gold)">⚜ <span class="stat-val" id="stat-gold">0</span></span>
         <span id="stat-guild"></span>
         <span style="margin-left:auto; cursor:pointer; color:#888; border-bottom:1px dotted #555; transition:0.15s;" onclick="goTab('profile')" onmouseover="this.style.color='var(--gold)';this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.color='#888';this.style.borderBottomColor='#555'">⚙ Profile</span>
@@ -293,6 +309,16 @@
             </div>
         </div>
 
+        <!-- DAILY QUESTS TAB -->
+        <div id="tab-quests" class="hidden">
+            <div class="card">
+                <h2>📜 Daily Void Quests</h2>
+                <p style="color:#888;">Complete quests for bonus rewards. Quests reset every 24 hours.</p>
+                <div id="quest-timer" style="color:#666; font-size:0.85rem; margin-bottom:15px;"></div>
+                <div id="quest-list"></div>
+            </div>
+        </div>
+
         <!-- CHAT TAB -->
         <div id="tab-chat" class="hidden">
             <div class="card">
@@ -319,24 +345,7 @@
                 
                 <div style="margin:20px 0;">
                     <label style="display:block; color:#888; font-size:0.85rem; margin-bottom:8px;">Avatar</label>
-                    <div id="avatar-selector" style="display:flex; gap:10px; flex-wrap:wrap;">
-                        <div class="avatar-option" data-avatar="⚔️" onclick="selectAvatar('⚔️')">⚔️</div>
-                        <div class="avatar-option" data-avatar="🗡️" onclick="selectAvatar('🗡️')">🗡️</div>
-                        <div class="avatar-option" data-avatar="🛡️" onclick="selectAvatar('🛡️')">🛡️</div>
-                        <div class="avatar-option" data-avatar="👤" onclick="selectAvatar('👤')">👤</div>
-                        <div class="avatar-option" data-avatar="🦇" onclick="selectAvatar('🦇')">🦇</div>
-                        <div class="avatar-option" data-avatar="💀" onclick="selectAvatar('💀')">💀</div>
-                        <div class="avatar-option" data-avatar="👻" onclick="selectAvatar('👻')">👻</div>
-                        <div class="avatar-option" data-avatar="🌙" onclick="selectAvatar('🌙')">🌙</div>
-                        <div class="avatar-option" data-avatar="⭐" onclick="selectAvatar('⭐')">⭐</div>
-                        <div class="avatar-option" data-avatar="🔥" onclick="selectAvatar('🔥')">🔥</div>
-                        <div class="avatar-option" data-avatar="❄️" onclick="selectAvatar('❄️')">❄️</div>
-                        <div class="avatar-option" data-avatar="⚡" onclick="selectAvatar('⚡')">⚡</div>
-                        <div class="avatar-option" data-avatar="🐉" onclick="selectAvatar('🐉')">🐉</div>
-                        <div class="avatar-option" data-avatar="🦅" onclick="selectAvatar('🦅')">🦅</div>
-                        <div class="avatar-option" data-avatar="🐺" onclick="selectAvatar('🐺')">🐺</div>
-                        <div class="avatar-option" data-avatar="🦁" onclick="selectAvatar('🦁')">🦁</div>
-                    </div>
+                    <div id="avatar-selector" style="display:flex; gap:10px; flex-wrap:wrap;"></div>
                     <input type="hidden" id="profile-avatar" value="⚔️">
                 </div>
                 
@@ -822,13 +831,27 @@
                     lastSeen: Date.now(),
                     createdAt: Date.now(),
                     bossData: {},
-                    trophies: []
+                    trophies: [],
+                    voidEntityTier: 0,
+                    dailyQuests: null,
+                    dailyQuestsLastReset: 0,
+                    warTrophyWins: 0,
+                    totalGoldSpent: 0,
+                    totalBossKills: 0
                 };
                 markDirty();
             } else {
                 authDebug('Existing player found, updating online status...');
                 gameState.players[username].online = true;
                 gameState.players[username].lastSeen = Date.now();
+                // Migrate new fields for existing players
+                const pl = gameState.players[username];
+                if (pl.voidEntityTier === undefined) pl.voidEntityTier = 0;
+                if (pl.dailyQuests === undefined) pl.dailyQuests = null;
+                if (pl.dailyQuestsLastReset === undefined) pl.dailyQuestsLastReset = 0;
+                if (pl.warTrophyWins === undefined) pl.warTrophyWins = 0;
+                if (pl.totalGoldSpent === undefined) pl.totalGoldSpent = 0;
+                if (pl.totalBossKills === undefined) pl.totalBossKills = 0;
                 markDirty();
             }
         
@@ -848,6 +871,7 @@
             addLog(`<span style="color:var(--gold)">Welcome, ${username}.</span>`);
             sendSystemChat(`⚔ ${username} has entered the Void.`);
             _stampIntegrity();
+            checkAndResetDailyQuests();
             authDebug('Login complete!');
         } catch (err) {
             console.warn('Login error:', err);
@@ -950,6 +974,8 @@
         
         document.getElementById('stat-str').innerText = p.str;
         document.getElementById('stat-wis').innerText = p.wis;
+        const wisMult = document.getElementById('stat-wis-mult');
+        if (wisMult) wisMult.textContent = `(×${(1 + p.wis / 100).toFixed(2)} XP)`;
         document.getElementById('stat-gold').innerText = p.gold;
         
         const guildSpan = document.getElementById('stat-guild');
@@ -1000,18 +1026,11 @@
                 displayNameInput.value = p.displayName || '';
             }
             
+            // Render level-locked avatar selector
+            renderAvatarSelector();
+            
             if (avatarInput) {
-                const currentAvatar = p.avatar || '⚔️';
-                avatarInput.value = currentAvatar;
-                
-                // Update visual selection
-                document.querySelectorAll('.avatar-option').forEach(opt => {
-                    opt.classList.remove('selected');
-                });
-                const selectedOpt = document.querySelector(`.avatar-option[data-avatar="${currentAvatar}"]`);
-                if (selectedOpt) {
-                    selectedOpt.classList.add('selected');
-                }
+                avatarInput.value = p.avatar || '⚔️';
             }
             
             if (bioInput) {
@@ -1063,7 +1082,9 @@
         }
         
         gameAction(() => {
-        const xpGain = Math.floor(10 + Math.random() * 20);
+        const baseXpGain = Math.floor(10 + Math.random() * 20);
+        const wisMultiplier = 1 + (p.wis / 100);
+        const xpGain = Math.floor(baseXpGain * wisMultiplier);
         const goldGain = Math.floor(5 + Math.random() * 15);
         
         // Enemies deal flat damage — higher max HP = more fights before resting
@@ -1073,6 +1094,9 @@
         p.gold += goldGain;
         p.kills++;
         p.hp -= damage;
+        
+        // Track daily quest progress
+        trackQuestProgress('minions', 1);
         
         // Track war kills if in active war
         if (p.guild) {
@@ -1200,7 +1224,7 @@
         html += `<div class="profile-stat-card"><div class="stat-label">Level</div><div class="stat-value">${pl.level}</div></div>`;
         html += `<div class="profile-stat-card"><div class="stat-label">HP</div><div class="stat-value">${pl.hp}/${pl.maxHp}</div></div>`;
         html += `<div class="profile-stat-card"><div class="stat-label">STR</div><div class="stat-value">${pl.str}</div></div>`;
-        html += `<div class="profile-stat-card"><div class="stat-label">WIS</div><div class="stat-value">${pl.wis}</div></div>`;
+        html += `<div class="profile-stat-card"><div class="stat-label">WIS (XP Mult)</div><div class="stat-value">${pl.wis} <span style="font-size:0.7rem; color:#888;">×${(1 + pl.wis / 100).toFixed(2)}</span></div></div>`;
         html += `<div class="profile-stat-card"><div class="stat-label">Gold</div><div class="stat-value">${(pl.gold || 0).toLocaleString()}</div></div>`;
         html += `<div class="profile-stat-card"><div class="stat-label">Total Kills</div><div class="stat-value">${(pl.kills || 0).toLocaleString()}</div></div>`;
         html += `</div>`;
@@ -1262,6 +1286,9 @@
         
         gameAction(() => {
         p.gold -= item.cost;
+        if (!p.totalGoldSpent) p.totalGoldSpent = 0;
+        p.totalGoldSpent += item.cost;
+        trackQuestProgress('gold', item.cost);
         item.effect();
         addLog(`<span style="color:var(--gold);">Purchased ${item.name}.</span>`);
         showToast('purchase', '🛒 Purchased!', item.name, `${item.desc} · -${item.cost} Gold`);
@@ -1757,7 +1784,7 @@
     }
 
     function endWar(war, winnerGuildId, winnerSide) {
-        const REWARD_PER_PLAYER = 10000;
+        const REWARD_PER_PLAYER = 100000; // 10x reward overhaul
         
         war.status = 'ended';
         war.endedAt = Date.now();
@@ -1773,7 +1800,33 @@
         let rewardedCount = 0;
         winnerGuild.members.forEach(memberName => {
             if (gameState.players[memberName]) {
-                gameState.players[memberName].gold += REWARD_PER_PLAYER;
+                const member = gameState.players[memberName];
+                member.gold += REWARD_PER_PLAYER;
+                
+                // Award Epic War Trophy (tracks total wins)
+                if (!member.warTrophyWins) member.warTrophyWins = 0;
+                member.warTrophyWins++;
+                
+                // Update or add the War Hero Trophy in trophies array
+                if (!member.trophies) member.trophies = [];
+                const existingWarTrophy = member.trophies.find(t => t.name === 'War Hero Trophy');
+                if (existingWarTrophy) {
+                    // Update existing trophy display — no stat bonus
+                    existingWarTrophy.count = member.warTrophyWins;
+                } else {
+                    member.trophies.push({
+                        name: 'War Hero Trophy',
+                        emoji: '⚔️',
+                        rarity: 'epic',
+                        str: 0,
+                        wis: 0,
+                        hp: 0,
+                        fromBoss: 'guild_war',
+                        earnedAt: Date.now(),
+                        count: member.warTrophyWins
+                    });
+                }
+                
                 rewardedCount++;
             }
         });
@@ -1783,9 +1836,9 @@
             ? `${war.attackerKills} - ${war.defenderKills}`
             : `${war.defenderKills} - ${war.attackerKills}`;
         
-        sendSystemChat(`🏆 WAR ENDED! 【${winnerGuild.tag}】 has defeated 【${loserGuild.tag}】! Final Score: ${finalScore}. ${rewardedCount} warriors rewarded ${REWARD_PER_PLAYER} gold each!`);
+        sendSystemChat(`🏆 WAR ENDED! 【${winnerGuild.tag}】 has defeated 【${loserGuild.tag}】! Final Score: ${finalScore}. ${rewardedCount} warriors rewarded ${REWARD_PER_PLAYER.toLocaleString()} gold + ⚔️ Epic War Trophy each!`);
         
-        addLog(`<span style="color:var(--gold); font-weight:bold;">🏆 Your guild has won the war! +${REWARD_PER_PLAYER} Gold!</span>`);
+        addLog(`<span style="color:var(--gold); font-weight:bold;">🏆 Your guild has won the war! +${REWARD_PER_PLAYER.toLocaleString()} Gold + ⚔️ War Hero Trophy!</span>`);
         
         markDirty();
         refreshUI();
@@ -2066,13 +2119,51 @@
     }
 
     function selectAvatar(emoji) {
+        // Check if avatar is locked
+        const avatarTiers = [
+            { level: 1, emojis: ['⚔️','🗡️','🛡️','👤'] },
+            { level: 10, emojis: ['🦇','💀','👻','🐍'] },
+            { level: 25, emojis: ['🔥','❄️','⚡','🌙'] },
+            { level: 50, emojis: ['🐉','🦅','🐺','🦁'] }
+        ];
+        for (const tier of avatarTiers) {
+            if (tier.emojis.includes(emoji) && p.level < tier.level) {
+                showToast('error', '🔒 Locked', `Requires Level ${tier.level}`, `You are Level ${p.level}`);
+                return;
+            }
+        }
         document.getElementById('profile-avatar').value = emoji;
         
         // Update visual selection
         document.querySelectorAll('.avatar-option').forEach(opt => {
             opt.classList.remove('selected');
         });
-        document.querySelector(`.avatar-option[data-avatar="${emoji}"]`).classList.add('selected');
+        const sel = document.querySelector(`.avatar-option[data-avatar="${emoji}"]`);
+        if (sel) sel.classList.add('selected');
+    }
+
+    function renderAvatarSelector() {
+        const container = document.getElementById('avatar-selector');
+        if (!container) return;
+        const avatarTiers = [
+            { level: 1, emojis: ['⚔️','🗡️','🛡️','👤'] },
+            { level: 10, emojis: ['🦇','💀','👻','🐍'] },
+            { level: 25, emojis: ['🔥','❄️','⚡','🌙'] },
+            { level: 50, emojis: ['🐉','🦅','🐺','🦁'] }
+        ];
+        const currentAvatar = p.avatar || '⚔️';
+        let html = '';
+        avatarTiers.forEach(tier => {
+            tier.emojis.forEach(em => {
+                const locked = p.level < tier.level;
+                const selected = em === currentAvatar;
+                html += `<div class="avatar-option${locked ? ' avatar-locked' : ''}${selected ? ' selected' : ''}" data-avatar="${em}" onclick="selectAvatar('${em}')">`;
+                html += em;
+                if (locked) html += `<span class="avatar-lock-tooltip">Lv ${tier.level} Required</span>`;
+                html += `</div>`;
+            });
+        });
+        container.innerHTML = html;
     }
 
     // ============================================
@@ -2287,7 +2378,13 @@
                 avatar: pl.avatar,
                 bio: pl.bio,
                 bossData: {},
-                trophies: []
+                trophies: [],
+                voidEntityTier: 0,
+                dailyQuests: null,
+                dailyQuestsLastReset: 0,
+                warTrophyWins: 0,
+                totalGoldSpent: 0,
+                totalBossKills: 0
             };
         });
         
@@ -2328,7 +2425,9 @@
             wis: adminRace === 'Wraith' ? 11 : 10,
             gold: 0, guild: null, kills: 0, deaths: 0,
             online: true, lastSeen: Date.now(), createdAt: Date.now(),
-            bossData: {}, trophies: []
+            bossData: {}, trophies: [],
+            voidEntityTier: 0, dailyQuests: null, dailyQuestsLastReset: 0,
+            warTrophyWins: 0, totalGoldSpent: 0, totalBossKills: 0
         };
         
         p = gameState.players[ADMIN];
@@ -2715,6 +2814,37 @@
 
     let activeBossFight = null; // { bossId, bossCurrentHp, bossMaxHp }
 
+    // Generate the Void Entity definition based on player's current tier
+    function getVoidEntityDef() {
+        const tier = (p.voidEntityTier || 0) + 1; // Next tier to fight
+        const tierMultiplier = Math.pow(1.20, tier - 1); // 20% scaling per tier
+        const rewardMultiplier = Math.pow(1.15, tier - 1); // 15% reward scaling per tier
+        const baseReward = Math.floor(5000 * rewardMultiplier);
+        return {
+            id: 'void_entity',
+            name: `Void Entity (Tier ${tier})`,
+            emoji: '🌀',
+            tier: tier,
+            unlockLevel: 100,
+            desc: `An infinite manifestation of the Void itself. It reforms stronger each time it falls. Current Tier: ${tier}.`,
+            rewardType: 'both',
+            baseHp: Math.floor(30000 * tierMultiplier),
+            baseDamage: Math.floor(120 * tierMultiplier),
+            hpPerLevel: Math.floor(350 * tierMultiplier),
+            dmgPerLevel: 4.5 * tierMultiplier,
+            xpReward: baseReward,
+            goldReward: baseReward,
+            regenPerMin: 250,
+            lootTable: [] // Void Entity has a fixed Void Essence trophy instead
+        };
+    }
+
+    // Find a boss definition by ID (supports both static bosses and Void Entity)
+    function findBossDef(bossId) {
+        if (bossId === 'void_entity') return getVoidEntityDef();
+        return BOSS_DEFINITIONS.find(b => b.id === bossId);
+    }
+
     function getBossMaxHp(boss) {
         return boss.baseHp + (p.level * boss.hpPerLevel);
     }
@@ -2755,6 +2885,38 @@
 
         const bossData = getPlayerBossData();
         let html = '';
+
+        // Render Void Entity at top if player is level 100+
+        if (p.level >= 100) {
+            const ve = getVoidEntityDef();
+            const veMaxHp = getBossMaxHp(ve);
+            const veTier = (p.voidEntityTier || 0) + 1;
+
+            html += `<div class="boss-card void-entity-card">`;
+            html += `<div class="boss-tier" style="background:rgba(255,136,0,0.4); color:#ff8800;">⚡ INFINITE BOSS</div>`;
+            html += `<h3 style="margin:0 0 5px 0; color:#ff8800;">${ve.emoji} ${ve.name}</h3>`;
+            html += `<p style="color:#888; font-size:0.85rem; margin:5px 0;">${ve.desc}</p>`;
+
+            html += `<div class="boss-hp-bar"><div class="boss-hp-fill" style="width:100%; background:linear-gradient(90deg, #ff8800, #ff0000);"></div>`;
+            html += `<div class="boss-hp-text">${veMaxHp.toLocaleString()} / ${veMaxHp.toLocaleString()}</div></div>`;
+
+            html += `<div style="margin:8px 0;">`;
+            html += `<span class="boss-reward-tag xp">+${ve.xpReward.toLocaleString()} XP</span>`;
+            html += `<span class="boss-reward-tag gold">+${ve.goldReward.toLocaleString()} Gold</span>`;
+            html += `<span class="boss-reward-tag item" style="background:rgba(255,136,0,0.15); color:#ff8800; border:1px solid #ff8800;">🌀 Void Essence</span>`;
+            html += `</div>`;
+
+            html += `<div style="font-size:0.8rem; color:#666; margin:5px 0;">Boss Damage: ~${getBossDamage(ve)} per hit</div>`;
+
+            if (p.voidEntityTier > 0) {
+                html += `<div style="font-size:0.85rem; color:#ff8800; margin:5px 0;">🌀 Highest Tier Defeated: <strong>${p.voidEntityTier}</strong></div>`;
+            }
+
+            html += `<button class="action-btn" onclick="startBossFight('void_entity')" style="background:#3a1a00; border-color:#884400;">🌀 Challenge Void Entity</button>`;
+            html += `</div>`;
+
+            html += `<div style="border-bottom:2px solid #333; margin:15px 0;"></div>`;
+        }
 
         BOSS_DEFINITIONS.forEach(boss => {
             const unlocked = p.level >= boss.unlockLevel;
@@ -2805,7 +2967,7 @@
     }
 
     function startBossFight(bossId) {
-        const boss = BOSS_DEFINITIONS.find(b => b.id === bossId);
+        const boss = findBossDef(bossId);
         if (!boss || p.level < boss.unlockLevel) return;
 
         if (p.hp <= 0) {
@@ -2825,7 +2987,7 @@
     }
 
     function rechallengeBoss(bossId) {
-        const boss = BOSS_DEFINITIONS.find(b => b.id === bossId);
+        const boss = findBossDef(bossId);
         if (!boss) return;
 
         if (p.hp <= 0) {
@@ -2852,11 +3014,12 @@
         const fightArea = document.getElementById('boss-fight-area');
         if (!fightArea || !activeBossFight) return;
 
-        const boss = BOSS_DEFINITIONS.find(b => b.id === activeBossFight.bossId);
+        const boss = findBossDef(activeBossFight.bossId);
         if (!boss) return;
 
         const hpPercent = Math.max(0, (activeBossFight.bossCurrentHp / activeBossFight.bossMaxHp) * 100);
-        const hpColor = hpPercent > 50 ? '#ff4444' : hpPercent > 25 ? '#ff8800' : '#ffcc00';
+        const isVoidEntity = activeBossFight.bossId === 'void_entity';
+        const hpColor = hpPercent > 50 ? (isVoidEntity ? '#ff8800' : '#ff4444') : hpPercent > 25 ? '#ff8800' : '#ffcc00';
         const playerHpPercent = Math.max(0, (p.hp / p.maxHp) * 100);
         const playerHpColor = playerHpPercent > 50 ? '#44ff44' : playerHpPercent > 25 ? '#ffaa00' : '#ff4444';
         const bossDmg = getBossDamage(boss);
@@ -2899,7 +3062,7 @@
     function attackBoss() {
         if (!activeBossFight || p.hp <= 0) return;
 
-        const boss = BOSS_DEFINITIONS.find(b => b.id === activeBossFight.bossId);
+        const boss = findBossDef(activeBossFight.bossId);
         if (!boss) return;
 
         gameAction(() => {
@@ -2920,7 +3083,10 @@
 
             // Check if boss is dead
             if (activeBossFight.bossCurrentHp <= 0) {
-                bossData[boss.id].defeated = true;
+                // Void Entity is never permanently defeated — it respawns at next tier
+                if (boss.id !== 'void_entity') {
+                    bossData[boss.id].defeated = true;
+                }
                 bossData[boss.id].currentHp = 0;
                 bossDefeated(boss);
                 return;
@@ -2948,32 +3114,69 @@
     }
 
     function bossDefeated(boss) {
-        // Roll for loot
-        const loot = rollBossLoot(boss);
+        const isVoidEntity = boss.id === 'void_entity';
+        
+        // Roll for loot (not for Void Entity — it has a fixed trophy)
+        const loot = isVoidEntity ? null : rollBossLoot(boss);
 
         gameAction(() => {
+            const wisMultiplier = 1 + (p.wis / 100);
+            
             // Apply rewards — XP and gold only granted on kill
-            if (boss.xpReward > 0) p.xp += boss.xpReward;
+            if (boss.xpReward > 0) {
+                const finalXp = Math.floor(boss.xpReward * wisMultiplier);
+                p.xp += finalXp;
+            }
             if (boss.goldReward > 0) p.gold += boss.goldReward;
 
-            // Apply trophy stats
             if (!p.trophies) p.trophies = [];
-            p.trophies.push({
-                name: loot.name,
-                emoji: loot.emoji,
-                rarity: loot.rarity,
-                str: loot.str,
-                wis: loot.wis,
-                hp: loot.hp,
-                fromBoss: boss.id,
-                earnedAt: Date.now()
-            });
 
-            // Apply permanent stat boosts from trophy
-            p.str += loot.str;
-            p.wis += loot.wis;
-            p.maxHp += loot.hp;
-            p.hp = Math.min(p.hp + loot.hp, p.maxHp);
+            if (isVoidEntity) {
+                // Void Entity: increment tier
+                if (!p.voidEntityTier) p.voidEntityTier = 0;
+                p.voidEntityTier++;
+                
+                // Update or create the Void Essence trophy (tracks highest tier)
+                const existingVoidTrophy = p.trophies.find(t => t.fromBoss === 'void_entity');
+                if (existingVoidTrophy) {
+                    existingVoidTrophy.name = `Void Essence Tier ${p.voidEntityTier}`;
+                    existingVoidTrophy.earnedAt = Date.now();
+                } else {
+                    p.trophies.push({
+                        name: `Void Essence Tier ${p.voidEntityTier}`,
+                        emoji: '🌀',
+                        rarity: 'legendary',
+                        str: 0,
+                        wis: 0,
+                        hp: 0,
+                        fromBoss: 'void_entity',
+                        earnedAt: Date.now()
+                    });
+                }
+            } else {
+                // Normal boss loot
+                p.trophies.push({
+                    name: loot.name,
+                    emoji: loot.emoji,
+                    rarity: loot.rarity,
+                    str: loot.str,
+                    wis: loot.wis,
+                    hp: loot.hp,
+                    fromBoss: boss.id,
+                    earnedAt: Date.now()
+                });
+
+                // Apply permanent stat boosts from trophy
+                p.str += loot.str;
+                p.wis += loot.wis;
+                p.maxHp += loot.hp;
+                p.hp = Math.min(p.hp + loot.hp, p.maxHp);
+            }
+
+            // Track boss kills for daily quests
+            if (!p.totalBossKills) p.totalBossKills = 0;
+            p.totalBossKills++;
+            trackQuestProgress('bosses', 1);
 
             // Check level ups
             while (p.xp >= p.level * 100) {
@@ -2992,19 +3195,29 @@
 
         // Build reward text
         let rewardText = '';
-        if (boss.xpReward > 0) rewardText += `+${boss.xpReward.toLocaleString()} XP `;
+        const wisMultiplier = 1 + (p.wis / 100);
+        if (boss.xpReward > 0) rewardText += `+${Math.floor(boss.xpReward * wisMultiplier).toLocaleString()} XP `;
         if (boss.goldReward > 0) rewardText += `+${boss.goldReward.toLocaleString()} Gold `;
 
-        const rarityColors = { common:'#aaa', uncommon:'#44ff44', rare:'#4488ff', epic:'#aa44ff', legendary:'#ff8800' };
-        const rarityColor = rarityColors[loot.rarity] || '#aaa';
+        if (isVoidEntity) {
+            showToast('victory', `🌀 Void Entity Tier ${p.voidEntityTier} Defeated!`,
+                `${rewardText}`,
+                `<span style="color:#ff8800;">🌀 Void Essence Tier ${p.voidEntityTier} [LEGENDARY]</span><br>The Void Entity grows stronger...`
+            );
+            addLog(`<span style="color:#ff8800; font-weight:bold;">🌀 You conquered the Void Entity Tier ${p.voidEntityTier}! It reforms, stronger than before...</span>`);
+            sendSystemChat(`🌀 ${p.displayName || currentUser} has conquered the Void Entity at Tier ${p.voidEntityTier}!`);
+        } else {
+            const rarityColors = { common:'#aaa', uncommon:'#44ff44', rare:'#4488ff', epic:'#aa44ff', legendary:'#ff8800' };
+            const rarityColor = rarityColors[loot.rarity] || '#aaa';
 
-        showToast('victory', `🏆 ${boss.name} Defeated!`,
-            `${rewardText}`,
-            `<span style="color:${rarityColor};">${loot.emoji} ${loot.name} [${loot.rarity.toUpperCase()}]</span><br>+${loot.str} STR, +${loot.wis} WIS, +${loot.hp} HP`
-        );
+            showToast('victory', `🏆 ${boss.name} Defeated!`,
+                `${rewardText}`,
+                `<span style="color:${rarityColor};">${loot.emoji} ${loot.name} [${loot.rarity.toUpperCase()}]</span><br>+${loot.str} STR, +${loot.wis} WIS, +${loot.hp} HP`
+            );
 
-        addLog(`<span style="color:var(--gold); font-weight:bold;">🏆 You defeated ${boss.name}! Earned: ${loot.emoji} ${loot.name} (${loot.rarity})</span>`);
-        sendSystemChat(`🏆 ${p.displayName || currentUser} has slain ${boss.name} and claimed ${loot.emoji} ${loot.name}!`);
+            addLog(`<span style="color:var(--gold); font-weight:bold;">🏆 You defeated ${boss.name}! Earned: ${loot.emoji} ${loot.name} (${loot.rarity})</span>`);
+            sendSystemChat(`🏆 ${p.displayName || currentUser} has slain ${boss.name} and claimed ${loot.emoji} ${loot.name}!`);
+        }
 
         activeBossFight = null;
         refreshBossUI();
@@ -3026,7 +3239,7 @@
         if (!activeBossFight) return;
 
         // Reset boss HP on flee
-        const boss = BOSS_DEFINITIONS.find(b => b.id === activeBossFight.bossId);
+        const boss = findBossDef(activeBossFight.bossId);
         if (boss) {
             const bossData = getPlayerBossData();
             const maxHp = getBossMaxHp(boss);
@@ -3045,7 +3258,7 @@
     function resetActiveBoss() {
         if (!activeBossFight) return;
 
-        const boss = BOSS_DEFINITIONS.find(b => b.id === activeBossFight.bossId);
+        const boss = findBossDef(activeBossFight.bossId);
         if (boss) {
             const bossData = getPlayerBossData();
             const maxHp = getBossMaxHp(boss);
@@ -3087,9 +3300,14 @@
         trophies.forEach(t => {
             const key = t.name;
             if (!stacked[key]) {
-                stacked[key] = { ...t, count: 1 };
+                stacked[key] = { ...t, count: t.count || 1 };
             } else {
-                stacked[key].count++;
+                // For War Hero Trophy, use the tracked count
+                if (t.count) {
+                    stacked[key].count = t.count;
+                } else {
+                    stacked[key].count++;
+                }
             }
         });
 
@@ -3142,6 +3360,151 @@
             document.addEventListener('click', closer);
         }, 50);
     }
+    // ============================================
+    // DAILY VOID QUESTS SYSTEM
+    // ============================================
+    const QUEST_TEMPLATES = [
+        // xpPct = fraction of current level's XP-to-next at easiest target
+        // goldPct = fraction of (p.level * 5) as base gold at easiest target
+        // Difficulty uses sqrt scaling so harder targets don't give absurd linear increases
+        { type: 'minions', desc: 'Slay {n} Minions', targets: [20, 40, 60, 80, 100], xpPct: 0.01, goldPct: 0.5 },
+        { type: 'bosses', desc: 'Defeat {n} Bosses', targets: [1, 2, 3, 5], xpPct: 0.02, goldPct: 1.0 },
+        { type: 'gold', desc: 'Spend {n} Gold', targets: [200, 500, 1000, 2000], xpPct: 0.012, goldPct: 0.6 }
+    ];
+
+    function generateDailyQuests() {
+        const quests = [];
+        const xpToLevel = p.level * 100; // XP needed for next level-up
+        // Pick 3 quests — one of each type
+        const shuffled = [...QUEST_TEMPLATES].sort(() => Math.random() - 0.5);
+        for (let i = 0; i < 3; i++) {
+            const template = shuffled[i % shuffled.length];
+            const target = template.targets[Math.floor(Math.random() * template.targets.length)];
+            // sqrt scaling: harder targets give diminishing returns instead of linear blowout
+            const difficultyMult = Math.sqrt(target / template.targets[0]);
+            const xpReward = Math.max(5, Math.floor(xpToLevel * template.xpPct * difficultyMult));
+            const goldReward = Math.max(5, Math.floor(p.level * 5 * template.goldPct * difficultyMult));
+            quests.push({
+                type: template.type,
+                desc: template.desc.replace('{n}', target.toLocaleString()),
+                target: target,
+                progress: 0,
+                goldReward: goldReward,
+                xpReward: xpReward,
+                claimed: false
+            });
+        }
+        return quests;
+    }
+
+    const QUEST_VERSION = 3; // Bump this whenever reward formula changes
+
+    function checkAndResetDailyQuests() {
+        if (!p) return;
+        const now = Date.now();
+        const lastReset = p.dailyQuestsLastReset || 0;
+        const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+        const versionMismatch = (p.dailyQuestsVersion || 0) !== QUEST_VERSION;
+
+        if (!p.dailyQuests || (now - lastReset) >= TWENTY_FOUR_HOURS || versionMismatch) {
+            p.dailyQuests = generateDailyQuests();
+            p.dailyQuestsLastReset = now;
+            p.dailyQuestsVersion = QUEST_VERSION;
+            markDirty();
+        }
+    }
+
+    function trackQuestProgress(type, amount) {
+        if (!p || !p.dailyQuests) return;
+        p.dailyQuests.forEach(q => {
+            if (q.type === type && !q.claimed) {
+                q.progress = Math.min(q.target, (q.progress || 0) + amount);
+            }
+        });
+    }
+
+    function claimQuestReward(index) {
+        if (!p || !p.dailyQuests || !p.dailyQuests[index]) return;
+        const quest = p.dailyQuests[index];
+        if (quest.claimed || quest.progress < quest.target) return;
+
+        gameAction(() => {
+            const wisMultiplier = 1 + (p.wis / 100);
+            const finalXp = Math.floor(quest.xpReward * wisMultiplier);
+            p.xp += finalXp;
+            p.gold += quest.goldReward;
+            quest.claimed = true;
+
+            // Check level ups
+            while (p.xp >= p.level * 100) {
+                p.xp -= p.level * 100;
+                p.level++;
+                p.maxHp += 20;
+                p.hp = p.maxHp;
+                p.str += 2;
+                p.wis += 2;
+                addLog(`<span style="color:#4af; font-weight:bold;">LEVEL UP! You are now level ${p.level}. HP fully restored!</span>`);
+            }
+
+            refreshUI();
+            markDirty();
+        });
+
+        showToast('victory', '📜 Quest Complete!', quest.desc, `+${quest.goldReward} Gold · +${Math.floor(quest.xpReward * (1 + p.wis / 100))} XP`);
+        addLog(`<span style="color:var(--gold);">📜 Quest complete: ${quest.desc}. Rewards claimed!</span>`);
+        refreshQuestsUI();
+    }
+
+    function refreshQuestsUI() {
+        checkAndResetDailyQuests();
+
+        const container = document.getElementById('quest-list');
+        const timerEl = document.getElementById('quest-timer');
+        if (!container) return;
+
+        // Calculate time until next reset
+        if (timerEl && p.dailyQuestsLastReset) {
+            const nextReset = p.dailyQuestsLastReset + (24 * 60 * 60 * 1000);
+            const remaining = Math.max(0, nextReset - Date.now());
+            const hours = Math.floor(remaining / (60 * 60 * 1000));
+            const mins = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
+            timerEl.innerHTML = `⏰ Resets in: <span style="color:var(--gold);">${hours}h ${mins}m</span>`;
+        }
+
+        if (!p.dailyQuests || p.dailyQuests.length === 0) {
+            container.innerHTML = '<p style="color:#666;">No quests available.</p>';
+            return;
+        }
+
+        const wisMultiplier = 1 + (p.wis / 100);
+        let html = '';
+
+        p.dailyQuests.forEach((quest, i) => {
+            const pct = Math.min(100, Math.floor((quest.progress / quest.target) * 100));
+            const complete = quest.progress >= quest.target;
+            const claimed = quest.claimed;
+
+            html += `<div class="quest-card${claimed ? ' quest-complete' : ''}">`;
+            html += `<div style="flex:1;">`;
+            html += `<div style="color:${claimed ? '#44ff44' : complete ? '#ff8800' : '#ccc'}; font-weight:bold;">${claimed ? '✅' : complete ? '🎉' : '📜'} ${quest.desc}</div>`;
+            html += `<div style="display:flex; align-items:center; gap:10px; margin-top:6px;">`;
+            html += `<div class="quest-progress-bar"><div class="quest-progress-fill" style="width:${pct}%;${claimed ? 'background:#44ff44;' : ''}"></div></div>`;
+            html += `<span style="color:#888; font-size:0.8rem; white-space:nowrap;">${quest.progress.toLocaleString()} / ${quest.target.toLocaleString()}</span>`;
+            html += `</div>`;
+            html += `<div style="margin-top:4px; font-size:0.8rem; color:#888;">Reward: <span style="color:var(--gold);">${quest.goldReward} Gold</span> + <span style="color:#4af;">${Math.floor(quest.xpReward * wisMultiplier)} XP</span></div>`;
+            html += `</div>`;
+
+            if (claimed) {
+                html += `<span style="color:#44ff44; font-size:0.85rem; white-space:nowrap;">✓ Claimed</span>`;
+            } else if (complete) {
+                html += `<button class="action-btn" onclick="claimQuestReward(${i})" style="background:#2a2a00; border-color:#555500; white-space:nowrap;">Claim Reward</button>`;
+            }
+            html += `</div>`;
+        });
+
+        container.innerHTML = html;
+    }
+
     // ============================================
     // INITIALIZATION
     // ============================================
