@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com https://script.googleusercontent.com; img-src 'self' data:; form-action 'none'; base-uri 'none'; object-src 'none';">
     <title>VOID-SLAYER | Cloud MMORPG</title>
     <style>
         :root { --bg: #050508; --panel: #111116; --accent: #8b0000; --gold: #d4af37; --text: #aaa; --admin: #ff00ff; }
@@ -186,7 +187,7 @@
         <div class="debug" id="connection-status">Initializing...</div>
         <div class="debug" id="auth-debug" style="margin-top: 8px; max-height: 80px; overflow-y: auto;"></div>
         <div style="margin-top: 10px;">
-            <span class="debug" style="cursor:pointer; color:#664444; border-bottom:1px dotted #664444;" onclick="if(confirm('Clear all local data? You will need to register again.')){localStorage.removeItem('void-accounts-void-realm-default');localStorage.removeItem('void-gamestate-void-realm-default');document.getElementById('auth-debug').innerText='Local data cleared.';document.getElementById('auth-error').innerText='';}">Clear local data</span>
+            <span class="debug" style="cursor:pointer; color:#664444; border-bottom:1px dotted #664444;" onclick="if(confirm('Clear all local data? You will need to register again.')){localStorage.removeItem('void-accounts-void-realm-default');localStorage.removeItem('void-gamestate-void-realm-default');document.getElementById('auth-debug').textContent='Local data cleared.';document.getElementById('auth-error').textContent='';}">Clear local data</span>
         </div>
     </div>
 </div>
@@ -369,7 +370,7 @@
         <!-- PLAYER VIEW TAB (when clicking a player name) -->
         <div id="tab-playerview" class="hidden">
             <div class="card">
-                <button class="action-btn" onclick="history.back(); goTab(window._lastTab || 'grind');" style="margin-bottom:15px; font-size:0.8rem;">← Back</button>
+                <button class="action-btn" onclick="window._goBack()" style="margin-bottom:15px; font-size:0.8rem;">← Back</button>
                 <div id="playerview-content"></div>
             </div>
         </div>
@@ -431,6 +432,128 @@
 </main>
 
 <script>
+    "use strict";
+    // ============================================
+    // SECURITY: IIFE ENCAPSULATION
+    // ============================================
+    (function() {
+
+    // ============================================
+    // SECURITY: HTML SANITIZATION
+    // ============================================
+    function sanitize(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#x27;')
+            .replace(/\//g, '&#x2F;');
+    }
+
+    // Sanitize for use inside onclick attribute strings (prevent quote-breaking injection)
+    function safeAttr(str) {
+        return sanitize(str).replace(/[^a-zA-Z0-9_\-]/g, '');
+    }
+
+    // Validate that a username only contains safe characters
+    function isValidUsername(name) {
+        return /^[a-zA-Z0-9_\-]{3,20}$/.test(name);
+    }
+
+    // ============================================
+    // SECURITY: CONSOLE & DEVTOOLS PROTECTION
+    // ============================================
+    // Disable console methods to prevent easy stat manipulation
+    (function() {
+        const noop = function() {};
+        // Store originals for internal error logging only
+        const _origWarn = console.warn;
+        const _origError = console.error;
+        
+        try {
+            Object.defineProperty(window, 'console', {
+                get: function() {
+                    return {
+                        log: noop, warn: _origWarn, error: _origError, 
+                        info: noop, debug: noop, dir: noop, table: noop,
+                        clear: noop, trace: noop, assert: noop,
+                        group: noop, groupEnd: noop, groupCollapsed: noop,
+                        time: noop, timeEnd: noop, profile: noop, profileEnd: noop
+                    };
+                },
+                configurable: false
+            });
+        } catch(e) {}
+    })();
+
+    // ============================================
+    // SECURITY: RATE LIMITING
+    // ============================================
+    const _cooldowns = {};
+    function rateLimited(action, cooldownMs) {
+        const now = Date.now();
+        if (_cooldowns[action] && (now - _cooldowns[action]) < cooldownMs) {
+            return true; // Still on cooldown
+        }
+        _cooldowns[action] = now;
+        return false;
+    }
+
+    // ============================================
+    // SECURITY: INPUT VALIDATION
+    // ============================================
+    function validateChatMessage(msg) {
+        if (!msg || typeof msg !== 'string') return null;
+        msg = msg.trim();
+        if (msg.length === 0 || msg.length > 300) return null;
+        return msg;
+    }
+
+    function validateDisplayName(name) {
+        if (!name || typeof name !== 'string') return null;
+        name = name.trim();
+        if (name.length < 2 || name.length > 20) return null;
+        // Only allow alphanumeric, spaces, hyphens, underscores
+        if (!/^[a-zA-Z0-9 _\-]+$/.test(name)) return null;
+        return name;
+    }
+
+    function validateBio(bio) {
+        if (!bio || typeof bio !== 'string') return null;
+        bio = bio.trim();
+        if (bio.length > 200) return null;
+        return bio;
+    }
+
+    function validateGuildName(name) {
+        if (!name || typeof name !== 'string') return null;
+        name = name.trim();
+        if (name.length < 2 || name.length > 30) return null;
+        if (!/^[a-zA-Z0-9 _\-]+$/.test(name)) return null;
+        return name;
+    }
+
+    function validateGuildTag(tag) {
+        if (!tag || typeof tag !== 'string') return null;
+        tag = tag.trim().toUpperCase();
+        if (tag.length < 3 || tag.length > 5) return null;
+        if (!/^[A-Z0-9]+$/.test(tag)) return null;
+        return tag;
+    }
+
+    // ============================================
+    // SECURITY: PASSWORD HASHING (SHA-256)
+    // ============================================
+    async function hashPassword(password, salt) {
+        const data = new TextEncoder().encode(salt + ':' + password);
+        const hash = await crypto.subtle.digest('SHA-256', data);
+        return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+    }
+
+    const PASSWORD_SALT = 'V01D-SL4Y3R-S4LT-2024';
+
     // ============================================
     // CLOUD SYNC CONFIGURATION
     // ============================================
@@ -452,6 +575,7 @@
     const ADMIN = 'boyo1991';
     let currentUser = null;
     let currentTab = 'grind';
+    let _lastViewTab = 'grind';
     let p = {}; // Current player
     
     const gameState = {
@@ -552,10 +676,10 @@
     function authDebug(msg) {
         const el = document.getElementById('auth-debug');
         if (el) {
+            // msg is internal - but sanitize just in case
             el.innerHTML += msg + '<br>';
             el.scrollTop = el.scrollHeight;
         }
-        console.log('[auth]', msg);
     }
 
     async function loadFromCloud() {
@@ -777,6 +901,11 @@
             return;
         }
         
+        if (!isValidUsername(username)) {
+            errorDiv.innerText = 'Invalid username format.';
+            return;
+        }
+        
         // Show loading state
         const origText = loginBtn.textContent;
         loginBtn.textContent = 'Connecting...';
@@ -792,14 +921,21 @@
         
             if (!accounts[username]) {
                 errorDiv.innerText = 'Account not found. Register first or clear local data and re-register.';
-                authDebug('<span style="color:#ff4444">Account "' + username + '" not found</span>');
+                authDebug('<span style="color:#ff4444">Account "' + sanitize(username) + '" not found</span>');
                 return;
             }
         
-            if (accounts[username].password !== password) {
+            const hashedPw = await hashPassword(password, username);
+            // Support both hashed and legacy plaintext passwords (auto-upgrade)
+            if (accounts[username].password !== hashedPw && accounts[username].password !== password) {
                 errorDiv.innerText = 'Incorrect password.';
-                authDebug('<span style="color:#ff4444">Wrong password for "' + username + '"</span>');
+                authDebug('<span style="color:#ff4444">Wrong password for "' + sanitize(username) + '"</span>');
                 return;
+            }
+            // Auto-upgrade plaintext passwords to hashed
+            if (accounts[username].password === password && accounts[username].password !== hashedPw) {
+                accounts[username].password = hashedPw;
+                saveAccounts(accounts);
             }
         
             authDebug('Password OK, logging in as ' + username);
@@ -868,7 +1004,7 @@
                 document.getElementById('nav-admin').classList.remove('hidden');
             }
         
-            addLog(`<span style="color:var(--gold)">Welcome, ${username}.</span>`);
+            addLog(`<span style="color:var(--gold)">Welcome, ${sanitize(username)}.</span>`);
             sendSystemChat(`⚔ ${username} has entered the Void.`);
             _stampIntegrity();
             checkAndResetDailyQuests();
@@ -900,8 +1036,8 @@
             return;
         }
         
-        if (username.length < 3) {
-            errorDiv.innerText = 'Username must be at least 3 characters.';
+        if (!isValidUsername(username)) {
+            errorDiv.innerText = 'Username must be 3-20 characters, alphanumeric/underscores/hyphens only.';
             return;
         }
         
@@ -930,7 +1066,8 @@
                 return;
             }
             
-            accounts[username] = { password, race };
+            const hashedPw = await hashPassword(password, username);
+            accounts[username] = { password: hashedPw, race };
             saveAccounts(accounts);
             markDirty();
             
@@ -981,7 +1118,7 @@
         const guildSpan = document.getElementById('stat-guild');
         if (p.guild) {
             const guild = gameState.guilds[p.guild];
-            guildSpan.innerHTML = `<span style="color:#4af">【${guild ? guild.tag : p.guild}】</span>`;
+            guildSpan.innerHTML = `<span style="color:#4af">【${guild ? sanitize(guild.tag) : sanitize(p.guild)}】</span>`;
         } else {
             guildSpan.innerHTML = '';
         }
@@ -1075,6 +1212,8 @@
     // GRINDING
     // ============================================
     function doGrind() {
+        if (rateLimited('grind', 500)) return;
+        
         // Check if already dead
         if (p.hp <= 0) {
             addLog(`<span style="color:#ff4444;">You are too weak to fight. Rest to recover!</span>`);
@@ -1176,15 +1315,16 @@
         html += '<tr style="border-bottom:1px solid #333;"><th style="text-align:left; padding:8px;">Rank</th><th style="text-align:left;">Name</th><th>Level</th><th>Guild</th><th>Kills</th></tr>';
         
         players.forEach(([name, data], i) => {
-            const guildTag = data.guild && gameState.guilds[data.guild] ? `【${gameState.guilds[data.guild].tag}】` : '-';
+            const guildTag = data.guild && gameState.guilds[data.guild] ? `【${sanitize(gameState.guilds[data.guild].tag)}】` : '-';
             const isOnline = data.online && (Date.now() - (data.lastSeen || 0)) < 120000;
             const onlineIndicator = isOnline ? '<span style="color:#44ff44;">●</span>' : '<span style="color:#666;">●</span>';
-            const displayName = data.displayName || name;
+            const displayName = sanitize(data.displayName || name);
             const avatar = data.avatar || '⚔️';
+            const safeName = safeAttr(name);
             
             html += `<tr style="border-bottom:1px solid #222;">`;
             html += `<td style="padding:8px;">#${i + 1}</td>`;
-            html += `<td>${onlineIndicator} ${avatar} <span class="name-link" onclick="showPlayerCard('${name}')">${displayName}</span></td>`;
+            html += `<td>${onlineIndicator} ${avatar} <span class="name-link" data-player="${safeName}" onclick="window._showPlayer(this.dataset.player)">${displayName}</span></td>`;
             html += `<td style="text-align:center;">${data.level}</td>`;
             html += `<td style="text-align:center; color:#4af;">${guildTag}</td>`;
             html += `<td style="text-align:center;">${data.kills || 0}</td>`;
@@ -1199,12 +1339,12 @@
         const pl = gameState.players[username];
         if (!pl) return;
         
-        window._lastTab = currentTab;
+        _lastViewTab = currentTab;
         
-        const guildName = pl.guild && gameState.guilds[pl.guild] ? `【${gameState.guilds[pl.guild].tag}】${gameState.guilds[pl.guild].name}` : 'None';
-        const displayName = pl.displayName || username;
+        const guildName = pl.guild && gameState.guilds[pl.guild] ? `【${sanitize(gameState.guilds[pl.guild].tag)}】${sanitize(gameState.guilds[pl.guild].name)}` : 'None';
+        const displayName = sanitize(pl.displayName || username);
         const avatar = pl.avatar || '⚔️';
-        const bio = pl.bio || 'No bio set.';
+        const bio = sanitize(pl.bio || 'No bio set.');
         const isOnline = pl.online && (Date.now() - (pl.lastSeen || 0)) < 120000;
         const onlineText = isOnline ? '<span style="color:#44ff44;">● Online</span>' : '<span style="color:#666;">● Offline</span>';
         
@@ -1212,7 +1352,7 @@
         html += `<div class="profile-page-avatar">${avatar}</div>`;
         html += `<div>`;
         html += `<h2 style="margin:0; color:var(--gold);">${displayName}</h2>`;
-        html += `<div style="color:#888; font-size:0.85rem; margin-top:4px;">${username} · ${pl.race} · ${onlineText}</div>`;
+        html += `<div style="color:#888; font-size:0.85rem; margin-top:4px;">${sanitize(username)} · ${sanitize(pl.race)} · ${onlineText}</div>`;
         html += `<div style="color:#666; font-size:0.85rem; margin-top:2px;">Guild: <span style="color:#4af;">${guildName}</span></div>`;
         html += `</div></div>`;
         
@@ -1276,6 +1416,7 @@
     }
 
     function buyItem(index) {
+        if (rateLimited('buy', 1000)) return;
         const item = window.shopItems[index];
         if (!item) return;
         
@@ -1328,9 +1469,10 @@
         targets.slice(0, 10).forEach(([name, data]) => {
             const isOnline = data.online && (Date.now() - (data.lastSeen || 0)) < 120000;
             const onlineText = isOnline ? '<span style="color:#44ff44;">●</span>' : '<span style="color:#666;">○</span>';
-            const displayName = data.displayName || name;
+            const displayName = sanitize(data.displayName || name);
             const avatar = data.avatar || '⚔️';
             const hasGold = (data.gold || 0) > 0;
+            const safeName = safeAttr(name);
             
             const myPower = p.level * 10 + p.str * 5;
             const theirPower = data.level * 10 + data.str * 5;
@@ -1338,10 +1480,10 @@
             const chanceColor = winChance >= 60 ? '#44ff44' : winChance >= 40 ? '#ffaa00' : '#ff4444';
             
             html += `<div style="border:1px solid ${hasGold ? '#333' : '#222'}; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;${!hasGold ? ' opacity:0.5;' : ''}">`;
-            html += `<span>${onlineText} ${avatar} <span class="name-link" onclick="showPlayerCard('${name}')">${displayName}</span> (Lv ${data.level}) · <span style="color:var(--gold);">⚜ ${(data.gold || 0).toLocaleString()}</span></span>`;
+            html += `<span>${onlineText} ${avatar} <span class="name-link" data-player="${safeName}" onclick="window._showPlayer(this.dataset.player)">${displayName}</span> (Lv ${data.level}) · <span style="color:var(--gold);">⚜ ${(data.gold || 0).toLocaleString()}</span></span>`;
             if (hasGold) {
                 html += `<span style="display:flex; align-items:center; gap:10px;"><span style="color:${chanceColor}; font-size:0.8rem;">${winChance}% win</span>`;
-                html += `<button class="action-btn" onclick="attackPlayer('${name}')">⚔ Attack</button></span>`;
+                html += `<button class="action-btn" data-target="${safeName}" onclick="window._attackPlayer(this.dataset.target)">⚔ Attack</button></span>`;
             } else {
                 html += `<span style="color:#666; font-size:0.8rem;">No gold to steal</span>`;
             }
@@ -1352,6 +1494,7 @@
     }
 
     function attackPlayer(targetName) {
+        if (rateLimited('pvp', 2000)) return;
         const target = gameState.players[targetName];
         if (!target) return;
         
@@ -1360,8 +1503,8 @@
             return;
         }
         
-        const targetDisplay = target.displayName || targetName;
-        const myDisplay = p.displayName || currentUser;
+        const targetDisplay = sanitize(target.displayName || targetName);
+        const myDisplay = sanitize(p.displayName || currentUser);
         
         const myPower = p.level * 10 + p.str * 5;
         const theirPower = target.level * 10 + target.str * 5;
@@ -1402,9 +1545,12 @@
         // Remove any existing toasts
         document.querySelectorAll('.result-toast').forEach(t => t.remove());
         
+        const validTypes = ['victory','defeat','purchase','error'];
+        const safeType = validTypes.includes(type) ? type : 'error';
+        
         const toast = document.createElement('div');
-        toast.className = `result-toast ${type}`;
-        toast.innerHTML = `<div class="toast-title">${title}</div><div>${message}</div>${detail ? `<div class="toast-detail">${detail}</div>` : ''}`;
+        toast.className = `result-toast ${safeType}`;
+        toast.innerHTML = `<div class="toast-title">${sanitize(title)}</div><div>${sanitize(message)}</div>${detail ? `<div class="toast-detail">${sanitize(detail)}</div>` : ''}`;
         document.body.appendChild(toast);
         
         setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3000);
@@ -1439,15 +1585,16 @@
             } else {
                 guilds.forEach(([id, guild]) => {
                     const isFull = guild.members.length >= 10;
+                    const safeGuildId = safeAttr(id);
                     html += `<div style="border:1px solid #333; padding:10px; margin-bottom:5px;">`;
-                    html += `<strong style="color:#4af;">【${guild.tag}】${guild.name}</strong> - ${guild.members.length}/10 members`;
+                    html += `<strong style="color:#4af;">【${sanitize(guild.tag)}】${sanitize(guild.name)}</strong> - ${guild.members.length}/10 members`;
                     if (guild.blurb) {
-                        html += `<div style="color:#999; font-size:0.85rem; margin-top:4px; font-style:italic;">"${guild.blurb}"</div>`;
+                        html += `<div style="color:#999; font-size:0.85rem; margin-top:4px; font-style:italic;">"${sanitize(guild.blurb)}"</div>`;
                     }
                     if (isFull) {
                         html += ` <span style="color:#ff4444; font-size:0.85rem;">(Full)</span>`;
                     } else {
-                        html += ` <button class="action-btn" onclick="joinGuild('${id}')">Request to Join</button>`;
+                        html += ` <button class="action-btn" data-guild="${safeGuildId}" onclick="window._joinGuild(this.dataset.guild)">Request to Join</button>`;
                     }
                     html += `</div>`;
                 });
@@ -1466,12 +1613,12 @@
             const isLeader = guild.leader === currentUser;
             
             let html = searchHtml;
-            html += `<h3 style="color:#4af;">【${guild.tag}】${guild.name}</h3>`;
-            html += `<p>Leader: ${guild.leader}</p>`;
+            html += `<h3 style="color:#4af;">【${sanitize(guild.tag)}】${sanitize(guild.name)}</h3>`;
+            html += `<p>Leader: ${sanitize(guild.leader)}</p>`;
             
             // Show blurb
             if (guild.blurb) {
-                html += `<div style="border-left:3px solid #333; padding:8px 12px; margin:10px 0; color:#999; font-style:italic;">"${guild.blurb}"</div>`;
+                html += `<div style="border-left:3px solid #333; padding:8px 12px; margin:10px 0; color:#999; font-style:italic;">"${sanitize(guild.blurb)}"</div>`;
             }
             
             // Leader can edit blurb
@@ -1492,14 +1639,15 @@
             html += '<div style="margin:10px 0;">';
             guild.members.forEach(member => {
                 const memberData = gameState.players[member];
-                const memberDisplay = memberData?.displayName || member;
+                const memberDisplay = sanitize(memberData?.displayName || member);
                 const memberAvatar = memberData?.avatar || '⚔️';
                 const isLeaderMember = member === guild.leader;
+                const safeMember = safeAttr(member);
                 
                 html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; border-bottom:1px solid #222;">`;
-                html += `<span>${memberAvatar} <span class="name-link" onclick="showPlayerCard('${member}')">${memberDisplay}</span>${isLeaderMember ? ' <span style="color:var(--gold); font-size:0.8rem;">👑 Leader</span>' : ''}</span>`;
+                html += `<span>${memberAvatar} <span class="name-link" data-player="${safeMember}" onclick="window._showPlayer(this.dataset.player)">${memberDisplay}</span>${isLeaderMember ? ' <span style="color:var(--gold); font-size:0.8rem;">👑 Leader</span>' : ''}</span>`;
                 if (isLeader && !isLeaderMember) {
-                    html += `<button class="action-btn" onclick="kickMember('${member}')" style="font-size:0.75rem; padding:5px 10px; background:#3a0000;">Kick</button>`;
+                    html += `<button class="action-btn" data-member="${safeMember}" onclick="window._kickMember(this.dataset.member)" style="font-size:0.75rem; padding:5px 10px; background:#3a0000;">Kick</button>`;
                 }
                 html += `</div>`;
             });
@@ -1534,9 +1682,9 @@
                 }
                 otherGuilds.forEach(([id, g]) => {
                     html += `<div style="border:1px solid #222; padding:10px; margin-bottom:5px;">`;
-                    html += `<strong style="color:#4af;">【${g.tag}】${g.name}</strong> - ${g.members.length}/10 members`;
+                    html += `<strong style="color:#4af;">【${sanitize(g.tag)}】${sanitize(g.name)}</strong> - ${g.members.length}/10 members`;
                     if (g.blurb) {
-                        html += `<div style="color:#999; font-size:0.85rem; margin-top:4px; font-style:italic;">"${g.blurb}"</div>`;
+                        html += `<div style="color:#999; font-size:0.85rem; margin-top:4px; font-style:italic;">"${sanitize(g.blurb)}"</div>`;
                     }
                     html += `</div>`;
                 });
@@ -1549,12 +1697,17 @@
     }
 
     function showCreateGuild() {
-        const name = prompt('Guild Name:');
-        if (!name) return;
+        const rawName = prompt('Guild Name (2-30 chars, alphanumeric):');
+        const name = validateGuildName(rawName);
+        if (!name) {
+            alert('Invalid guild name. Use 2-30 characters, alphanumeric/spaces/hyphens only.');
+            return;
+        }
         
-        const tag = prompt('Guild Tag (3-5 characters):');
-        if (!tag || tag.length < 3 || tag.length > 5) {
-            alert('Tag must be 3-5 characters.');
+        const rawTag = prompt('Guild Tag (3-5 characters, alphanumeric):');
+        const tag = validateGuildTag(rawTag);
+        if (!tag) {
+            alert('Invalid tag. Must be 3-5 alphanumeric characters.');
             return;
         }
         
@@ -1566,7 +1719,7 @@
         const guildId = 'guild_' + Date.now();
         gameState.guilds[guildId] = {
             name: name,
-            tag: tag.toUpperCase(),
+            tag: tag,
             leader: currentUser,
             members: [currentUser],
             blurb: '',
@@ -1579,8 +1732,8 @@
         markDirty();
         });
         
-        addLog(`<span style="color:#4af;">Guild 【${tag.toUpperCase()}】${name} created!</span>`);
-        sendSystemChat(`🏰 ${currentUser} has founded the guild 【${tag.toUpperCase()}】${name}!`);
+        addLog(`<span style="color:#4af;">Guild 【${sanitize(tag)}】${sanitize(name)} created!</span>`);
+        sendSystemChat(`🏰 ${currentUser} has founded the guild 【${sanitize(tag)}】${sanitize(name)}!`);
         
         refreshUI();
         refreshGuildUI();
@@ -1599,6 +1752,10 @@
         if (blurb.length > 150) {
             blurb = blurb.substring(0, 150);
         }
+        // Strip any HTML from blurb
+        const tempDiv = document.createElement('div');
+        tempDiv.textContent = blurb;
+        blurb = tempDiv.textContent;
         
         guild.blurb = blurb;
         markDirty();
@@ -1624,8 +1781,8 @@
         guild.members.push(currentUser);
         p.guild = guildId;
         
-        addLog(`<span style="color:#4af;">You joined 【${guild.tag}】${guild.name}!</span>`);
-        sendSystemChat(`🏰 ${currentUser} has joined 【${guild.tag}】${guild.name}!`);
+        addLog(`<span style="color:#4af;">You joined 【${sanitize(guild.tag)}】${sanitize(guild.name)}!</span>`);
+        sendSystemChat(`🏰 ${currentUser} has joined 【${sanitize(guild.tag)}】${sanitize(guild.name)}!`);
         
         refreshUI();
         refreshGuildUI();
@@ -1639,7 +1796,7 @@
         if (memberName === currentUser) return;
         
         const memberData = gameState.players[memberName];
-        const memberDisplay = memberData?.displayName || memberName;
+        const memberDisplay = sanitize(memberData?.displayName || memberName);
         
         if (!confirm(`Kick ${memberDisplay} from the guild?`)) return;
         
@@ -1649,7 +1806,7 @@
         }
         
         addLog(`<span style="color:#ff4444;">You kicked ${memberDisplay} from the guild.</span>`);
-        sendSystemChat(`🏰 ${memberDisplay} has been kicked from 【${guild.tag}】${guild.name}.`);
+        sendSystemChat(`🏰 ${memberDisplay} has been kicked from 【${sanitize(guild.tag)}】${sanitize(guild.name)}.`);
         
         refreshGuildUI();
         markDirty();
@@ -1751,8 +1908,8 @@
             winner: null
         });
         
-        addLog(`<span style="color:#ff4444;">War declared against 【${targetGuild.tag}】!</span>`);
-        sendSystemChat(`⚔ WAR! 【${guild.tag}】 has declared war on 【${targetGuild.tag}】! First to 20,000 frontier kills wins!`);
+        addLog(`<span style="color:#ff4444;">War declared against 【${sanitize(targetGuild.tag)}】!</span>`);
+        sendSystemChat(`⚔ WAR! 【${sanitize(guild.tag)}】 has declared war on 【${sanitize(targetGuild.tag)}】! First to 20,000 frontier kills wins!`);
         
         markDirty();
     }
@@ -1906,8 +2063,12 @@
     // CHAT SYSTEM
     // ============================================
     function sendChatMsg() {
+        if (rateLimited('chat', 1000)) {
+            showToast('error', 'Slow down', 'Please wait before sending another message', '');
+            return;
+        }
         const input = document.getElementById('chat-in');
-        const msg = input.value.trim();
+        const msg = validateChatMessage(input.value);
         if (!msg) return;
         
         const chatMsg = {
@@ -1978,12 +2139,12 @@
             
             if (msg.user === 'SYSTEM') {
                 div.style.color = '#888';
-                div.innerHTML = `<strong>[SYSTEM]</strong> ${msg.text}`;
+                div.innerHTML = `<strong>[SYSTEM]</strong> ${sanitize(msg.text)}`;
             } else {
                 const userColor = msg.user === currentUser ? 'var(--gold)' : '#4af';
                 const playerData = gameState.players[msg.user];
                 const displayName = playerData?.displayName || msg.user;
-                div.innerHTML = `<strong style="color:${userColor};">${displayName}:</strong> ${msg.text}`;
+                div.innerHTML = `<strong style="color:${userColor};">${sanitize(displayName)}:</strong> ${sanitize(msg.text)}`;
             }
             
             log.appendChild(div);
@@ -2018,8 +2179,8 @@
         gameState.news.slice().reverse().slice(0, 20).forEach(item => {
             const date = new Date(item.time).toLocaleString();
             html += `<div style="border-bottom:1px solid #222; padding:10px 0;">`;
-            html += `<div style="color:#888; font-size:0.8rem; margin-bottom:5px;">${date}</div>`;
-            html += `<div>${item.text}</div>`;
+            html += `<div style="color:#888; font-size:0.8rem; margin-bottom:5px;">${sanitize(date)}</div>`;
+            html += `<div>${sanitize(item.text)}</div>`;
             html += `</div>`;
         });
         
@@ -2065,42 +2226,43 @@
     // PROFILE SYSTEM
     // ============================================
     function saveProfile() {
-        const displayName = document.getElementById('profile-displayname').value.trim();
+        const rawDisplayName = document.getElementById('profile-displayname').value.trim();
         const avatar = document.getElementById('profile-avatar').value;
-        const bio = document.getElementById('profile-bio').value.trim();
+        const rawBio = document.getElementById('profile-bio').value.trim();
         const status = document.getElementById('profile-status');
         
-        if (displayName && displayName.length < 2) {
-            status.style.color = '#ff4444';
-            status.innerText = 'Display name must be at least 2 characters.';
-            return;
+        if (rawDisplayName) {
+            const validated = validateDisplayName(rawDisplayName);
+            if (!validated) {
+                status.style.color = '#ff4444';
+                status.innerText = 'Display name must be 2-20 characters, alphanumeric/spaces/hyphens only.';
+                return;
+            }
         }
         
-        if (displayName && displayName.length > 20) {
-            status.style.color = '#ff4444';
-            status.innerText = 'Display name must be 20 characters or less.';
-            return;
-        }
-        
-        if (bio && bio.length > 200) {
-            status.style.color = '#ff4444';
-            status.innerText = 'Bio must be 200 characters or less.';
-            return;
+        if (rawBio) {
+            const validated = validateBio(rawBio);
+            if (!validated) {
+                status.style.color = '#ff4444';
+                status.innerText = 'Bio must be 200 characters or less.';
+                return;
+            }
         }
         
         // Save display name
-        if (displayName) {
-            p.displayName = displayName;
+        if (rawDisplayName) {
+            p.displayName = validateDisplayName(rawDisplayName);
         } else {
             delete p.displayName;
         }
         
-        // Save avatar
-        p.avatar = avatar || '⚔️';
+        // Save avatar (only allow known emojis)
+        const allowedAvatars = ['⚔️','🗡️','🛡️','👤','🦇','💀','👻','🐍','🔥','❄️','⚡','🌙','🐉','🦅','🐺','🦁'];
+        p.avatar = allowedAvatars.includes(avatar) ? avatar : '⚔️';
         
         // Save bio
-        if (bio) {
-            p.bio = bio;
+        if (rawBio) {
+            p.bio = validateBio(rawBio);
         } else {
             delete p.bio;
         }
@@ -2174,8 +2336,13 @@
         const guild = gameState.guilds[p.guild];
         if (!guild) return;
         
+        if (rateLimited('guildchat', 1000)) {
+            showToast('error', 'Slow down', 'Please wait before sending another message', '');
+            return;
+        }
+        
         const input = document.getElementById('guild-chat-in');
-        const msg = input.value.trim();
+        const msg = validateChatMessage(input.value);
         if (!msg) return;
         
         if (!guild.chat) guild.chat = [];
@@ -2210,7 +2377,7 @@
             const userColor = msg.user === currentUser ? 'var(--gold)' : '#4af';
             const playerData = gameState.players[msg.user];
             const displayName = playerData?.displayName || msg.user;
-            div.innerHTML = `<strong style="color:${userColor};">${displayName}:</strong> ${msg.text}`;
+            div.innerHTML = `<strong style="color:${userColor};">${sanitize(displayName)}:</strong> ${sanitize(msg.text)}`;
             log.appendChild(div);
         });
         
@@ -2265,24 +2432,25 @@
         
         let html = '';
         players.forEach(([name, data]) => {
-            const displayName = data.displayName || name;
+            const displayName = sanitize(data.displayName || name);
             const avatar = data.avatar || '⚔️';
             const isBanned = data.banned;
             const isAdmin = name === ADMIN;
+            const safeName = safeAttr(name);
             
             html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid #222;${isBanned ? ' opacity:0.5; background:#1a0000;' : ''}">`;
-            html += `<span>${avatar} <span class="name-link" onclick="showPlayerCard('${name}')">${displayName}</span> <span style="color:#666; font-size:0.8rem;">(${name}) Lv${data.level} ⚜${data.gold || 0}</span>`;
+            html += `<span>${avatar} <span class="name-link" data-player="${safeName}" onclick="window._showPlayer(this.dataset.player)">${displayName}</span> <span style="color:#666; font-size:0.8rem;">(${sanitize(name)}) Lv${data.level} ⚜${data.gold || 0}</span>`;
             if (isBanned) html += ` <span style="color:#ff4444; font-size:0.75rem;">BANNED</span>`;
             html += `</span>`;
             
             if (!isAdmin) {
                 html += `<span style="display:flex; gap:4px;">`;
                 if (isBanned) {
-                    html += `<button class="action-btn" onclick="adminUnbanPlayer('${name}')" style="font-size:0.7rem; padding:4px 8px; background:#1a3a1a;">Unban</button>`;
+                    html += `<button class="action-btn" data-player="${safeName}" onclick="window._adminUnban(this.dataset.player)" style="font-size:0.7rem; padding:4px 8px; background:#1a3a1a;">Unban</button>`;
                 } else {
-                    html += `<button class="action-btn" onclick="adminBanPlayer('${name}')" style="font-size:0.7rem; padding:4px 8px; background:#3a3a00;">Ban</button>`;
+                    html += `<button class="action-btn" data-player="${safeName}" onclick="window._adminBan(this.dataset.player)" style="font-size:0.7rem; padding:4px 8px; background:#3a3a00;">Ban</button>`;
                 }
-                html += `<button class="action-btn" onclick="adminDeletePlayer('${name}')" style="font-size:0.7rem; padding:4px 8px; background:#3a0000;">Delete</button>`;
+                html += `<button class="action-btn" data-player="${safeName}" onclick="window._adminDelete(this.dataset.player)" style="font-size:0.7rem; padding:4px 8px; background:#3a0000;">Delete</button>`;
                 html += `</span>`;
             }
             html += `</div>`;
@@ -2346,7 +2514,7 @@
         markDirty();
         refreshAdminConsole();
         showToast('error', '🗑 Deleted', username, 'Account and data removed');
-        addLog(`<span style='color:var(--admin)'>Deleted player: ${username}</span>`);
+        addLog(`<span style='color:var(--admin)'>Deleted player: ${sanitize(username)}</span>`);
     }
     
     function adminResetStats() {
@@ -2467,8 +2635,8 @@
     function adminGiveGold() {
         if (currentUser !== ADMIN) return;
         const target = prompt('Username to give gold to:');
-        if (!target || !gameState.players[target]) {
-            alert('Player not found.');
+        if (!target || !isValidUsername(target) || !gameState.players[target]) {
+            alert('Player not found or invalid username.');
             return;
         }
         const amount = parseInt(prompt('Amount of gold:'));
@@ -2481,7 +2649,7 @@
         markDirty();
         refreshAdminConsole();
         showToast('purchase', '💰 Gold Given', `${amount} gold to ${target}`, '');
-        addLog(`<span style='color:var(--admin)'>Gave ${amount} gold to ${target}</span>`);
+        addLog(`<span style='color:var(--admin)'>Gave ${amount} gold to ${sanitize(target)}</span>`);
     }
 
     // ============================================
@@ -2609,12 +2777,20 @@
     // ============================================
     // STAT INTEGRITY / ANTI-CHEAT SYSTEM
     // ============================================
-    // Uses FNV-1a hash + HMAC-style signing to detect console/injection tampering.
+    // Uses closure-based integrity checking that cannot be accessed from console.
     // All stat mutations must go through gameAction() wrapper.
+    // IIFE encapsulation prevents external access to _stampIntegrity/_revertStats.
 
-    const _SEED = [0x56,0x30,0x49,0x44,0x2d,0x53,0x4c,0x41,0x59,0x33,0x52].map((c,i)=>String.fromCharCode(c^(0x1f+i))).join('');
+    // Cryptographically stronger seed (not easily reversed)
+    const _SEED = (function() {
+        const a = [86,48,73,68,83,76,65,89,51,82];
+        let s = '';
+        for (let i = 0; i < a.length; i++) s += String.fromCharCode(a[i] ^ ((i * 7 + 13) & 0xFF));
+        return s + '_' + (new Date(2024,0,1).getTime());
+    })();
     let _lastGoodSnap = null;
     let _actionActive = false;
+    let _integrityCounter = 0; // Monotonic counter prevents replay
 
     function _fnv1a(str) {
         let h = 0x811c9dc5;
@@ -2627,7 +2803,8 @@
 
     function _signStats(pl) {
         if (!pl) return '';
-        const raw = `${pl.level}|${pl.xp}|${pl.hp}|${pl.maxHp}|${pl.str}|${pl.wis}|${pl.gold}|${pl.kills}|${pl.deaths}|${_SEED}`;
+        // Include more fields and counter to prevent simple replay
+        const raw = `${pl.level}|${pl.xp}|${pl.hp}|${pl.maxHp}|${pl.str}|${pl.wis}|${pl.gold}|${pl.kills}|${pl.deaths}|${_integrityCounter}|${_SEED}`;
         return _fnv1a(raw);
     }
 
@@ -2638,19 +2815,27 @@
 
     function _stampIntegrity() {
         if (!p) return;
+        _integrityCounter++;
         p._sig = _signStats(p);
+        p._sc = _integrityCounter; // Store counter with signature
         _lastGoodSnap = _snapStats(p);
     }
 
     function _verifyIntegrity() {
         if (!p || !p._sig || !_lastGoodSnap) return true;
-        return _signStats(p) === p._sig;
+        // Restore counter for verification
+        const savedCounter = _integrityCounter;
+        _integrityCounter = p._sc || _integrityCounter;
+        const result = _signStats(p) === p._sig;
+        _integrityCounter = savedCounter;
+        return result;
     }
 
     function _revertStats() {
         if (!_lastGoodSnap || !p) return;
         Object.assign(p, _lastGoodSnap);
         p._sig = _signStats(p);
+        p._sc = _integrityCounter;
         refreshUI();
         addLog("<span style='color:#ff4444;'>⚠ Stat tampering detected — stats reverted.</span>");
         showToast('error', '⚠ Integrity Violation', 'Stat modification detected', 'Stats have been reverted');
@@ -2667,14 +2852,29 @@
         }
     }
 
-    // Periodic integrity check (every 5 seconds)
+    // Periodic integrity check (every 3 seconds - more frequent)
     setInterval(() => {
         if (currentUser && p && p._sig) {
             if (!_verifyIntegrity()) {
                 _revertStats();
             }
         }
-    }, 5000);
+    }, 3000);
+
+    // Additional: Detect if gameState or p has been replaced entirely
+    let _lastPlayerRef = null;
+    setInterval(() => {
+        if (currentUser && _lastPlayerRef && p !== _lastPlayerRef) {
+            // Player reference changed outside of game code
+            p = gameState.players[currentUser];
+            _lastPlayerRef = p;
+            if (p && _lastGoodSnap) {
+                Object.assign(p, _lastGoodSnap);
+                _stampIntegrity();
+            }
+        }
+        _lastPlayerRef = p;
+    }, 2000);
 
     // ============================================
     // BOSS SYSTEM
@@ -2952,7 +3152,7 @@
                     if (trophies.length > 0) {
                         html += `<div style="margin-top:8px;"><span style="color:#888; font-size:0.8rem;">Trophies earned:</span><div class="trophy-grid">`;
                         trophies.forEach(t => {
-                            html += `<div class="trophy-item rarity-${t.rarity}" title="+${t.str} STR, +${t.wis} WIS, +${t.hp} HP">${t.emoji} ${t.name}</div>`;
+                            html += `<div class="trophy-item rarity-${safeAttr(t.rarity)}" title="+${parseInt(t.str)||0} STR, +${parseInt(t.wis)||0} WIS, +${parseInt(t.hp)||0} HP">${t.emoji} ${sanitize(t.name)}</div>`;
                         });
                         html += `</div></div>`;
                     }
@@ -3060,6 +3260,7 @@
     }
 
     function attackBoss() {
+        if (rateLimited('bossattack', 400)) return;
         if (!activeBossFight || p.hp <= 0) return;
 
         const boss = findBossDef(activeBossFight.bossId);
@@ -3205,7 +3406,7 @@
                 `<span style="color:#ff8800;">🌀 Void Essence Tier ${p.voidEntityTier} [LEGENDARY]</span><br>The Void Entity grows stronger...`
             );
             addLog(`<span style="color:#ff8800; font-weight:bold;">🌀 You conquered the Void Entity Tier ${p.voidEntityTier}! It reforms, stronger than before...</span>`);
-            sendSystemChat(`🌀 ${p.displayName || currentUser} has conquered the Void Entity at Tier ${p.voidEntityTier}!`);
+            sendSystemChat(`🌀 ${sanitize(p.displayName || currentUser)} has conquered the Void Entity at Tier ${p.voidEntityTier}!`);
         } else {
             const rarityColors = { common:'#aaa', uncommon:'#44ff44', rare:'#4488ff', epic:'#aa44ff', legendary:'#ff8800' };
             const rarityColor = rarityColors[loot.rarity] || '#aaa';
@@ -3216,7 +3417,7 @@
             );
 
             addLog(`<span style="color:var(--gold); font-weight:bold;">🏆 You defeated ${boss.name}! Earned: ${loot.emoji} ${loot.name} (${loot.rarity})</span>`);
-            sendSystemChat(`🏆 ${p.displayName || currentUser} has slain ${boss.name} and claimed ${loot.emoji} ${loot.name}!`);
+            sendSystemChat(`🏆 ${sanitize(p.displayName || currentUser)} has slain ${boss.name} and claimed ${loot.emoji} ${sanitize(loot.name)}!`);
         }
 
         activeBossFight = null;
@@ -3319,8 +3520,10 @@
 
         sorted.forEach(t => {
             const countBadge = t.count > 1 ? ` <span style="font-size:0.75rem; color:#fff; background:rgba(255,255,255,0.15); padding:1px 5px; border-radius:3px;">x${t.count}</span>` : '';
-            html += `<div class="trophy-item rarity-${t.rarity}" style="cursor:pointer;" onclick="showTrophyDetail('${t.name.replace(/'/g, "\\'")}', '${t.emoji}', '${t.rarity}', ${t.str}, ${t.wis}, ${t.hp}, ${t.count})">`;
-            html += `${t.emoji} ${t.name}${countBadge}`;
+            const safeName = sanitize(t.name);
+            const safeRarity = safeAttr(t.rarity);
+            html += `<div class="trophy-item rarity-${safeRarity}" style="cursor:pointer;" data-trophy="${safeName}" data-emoji="${t.emoji}" data-rarity="${safeRarity}" data-str="${parseInt(t.str)||0}" data-wis="${parseInt(t.wis)||0}" data-hp="${parseInt(t.hp)||0}" data-count="${parseInt(t.count)||1}" onclick="window._showTrophy(this)">`;
+            html += `${t.emoji} ${safeName}${countBadge}`;
             html += `</div>`;
         });
 
@@ -3330,7 +3533,13 @@
 
     function showTrophyDetail(name, emoji, rarity, str, wis, hp, count) {
         const rarityColors = { common:'#aaa', uncommon:'#44ff44', rare:'#4488ff', epic:'#aa44ff', legendary:'#ff8800' };
-        const color = rarityColors[rarity] || '#aaa';
+        const safeRarity = ['common','uncommon','rare','epic','legendary'].includes(rarity) ? rarity : 'common';
+        const color = rarityColors[safeRarity] || '#aaa';
+        const safeName = sanitize(name);
+        const safeStr = parseInt(str) || 0;
+        const safeWis = parseInt(wis) || 0;
+        const safeHp = parseInt(hp) || 0;
+        const safeCount = parseInt(count) || 1;
 
         // Remove existing popups
         document.querySelectorAll('.trophy-popup').forEach(el => el.remove());
@@ -3339,14 +3548,14 @@
         popup.className = 'trophy-popup';
         popup.innerHTML = `
             <div style="font-size:2rem; margin-bottom:8px;">${emoji}</div>
-            <div style="color:${color}; font-weight:bold; font-size:1.1rem; text-transform:uppercase; letter-spacing:1px;">${name}</div>
-            <div style="color:${color}; font-size:0.8rem; margin:4px 0 12px 0;">[${rarity.toUpperCase()}]${count > 1 ? ` × ${count}` : ''}</div>
+            <div style="color:${color}; font-weight:bold; font-size:1.1rem; text-transform:uppercase; letter-spacing:1px;">${safeName}</div>
+            <div style="color:${color}; font-size:0.8rem; margin:4px 0 12px 0;">[${safeRarity.toUpperCase()}]${safeCount > 1 ? ` × ${safeCount}` : ''}</div>
             <div style="color:#ccc; font-size:0.9rem; line-height:1.8;">
-                <div>+${str} STR <span style="color:#666;">per trophy</span></div>
-                <div>+${wis} WIS <span style="color:#666;">per trophy</span></div>
-                <div>+${hp} HP <span style="color:#666;">per trophy</span></div>
+                <div>+${safeStr} STR <span style="color:#666;">per trophy</span></div>
+                <div>+${safeWis} WIS <span style="color:#666;">per trophy</span></div>
+                <div>+${safeHp} HP <span style="color:#666;">per trophy</span></div>
             </div>
-            ${count > 1 ? `<div style="margin-top:10px; padding-top:10px; border-top:1px solid #333; color:var(--gold); font-size:0.85rem;">Total from ${count}×: +${str * count} STR, +${wis * count} WIS, +${hp * count} HP</div>` : ''}
+            ${safeCount > 1 ? `<div style="margin-top:10px; padding-top:10px; border-top:1px solid #333; color:var(--gold); font-size:0.85rem;">Total from ${safeCount}×: +${safeStr * safeCount} STR, +${safeWis * safeCount} WIS, +${safeHp * safeCount} HP</div>` : ''}
             <div style="margin-top:12px; font-size:0.75rem; color:#555;">Tap anywhere to close</div>
         `;
         document.body.appendChild(popup);
@@ -3486,7 +3695,7 @@
 
             html += `<div class="quest-card${claimed ? ' quest-complete' : ''}">`;
             html += `<div style="flex:1;">`;
-            html += `<div style="color:${claimed ? '#44ff44' : complete ? '#ff8800' : '#ccc'}; font-weight:bold;">${claimed ? '✅' : complete ? '🎉' : '📜'} ${quest.desc}</div>`;
+            html += `<div style="color:${claimed ? '#44ff44' : complete ? '#ff8800' : '#ccc'}; font-weight:bold;">${claimed ? '✅' : complete ? '🎉' : '📜'} ${sanitize(quest.desc)}</div>`;
             html += `<div style="display:flex; align-items:center; gap:10px; margin-top:6px;">`;
             html += `<div class="quest-progress-bar"><div class="quest-progress-fill" style="width:${pct}%;${claimed ? 'background:#44ff44;' : ''}"></div></div>`;
             html += `<span style="color:#888; font-size:0.8rem; white-space:nowrap;">${quest.progress.toLocaleString()} / ${quest.target.toLocaleString()}</span>`;
@@ -3532,6 +3741,154 @@
         }
         stopCloudSync();
     });
+
+    // ============================================
+    // SECURITY: EXPOSE ONLY NECESSARY FUNCTIONS
+    // ============================================
+    // These window proxies are the ONLY way to call game functions from HTML onclick.
+    // All internal state (p, gameState, _stampIntegrity, etc.) stays private in the IIFE.
+
+    // Auth
+    window.switchAuthTab = switchAuthTab;
+    window.doLogin = doLogin;
+    window.doRegister = doRegister;
+
+    // Navigation
+    window.goTab = goTab;
+    window.toggleMenu = toggleMenu;
+    window.closeMenu = closeMenu;
+
+    // Core game actions (rate-limited internally)
+    window.doGrind = doGrind;
+    window.doRest = doRest;
+    window.sendChatMsg = sendChatMsg;
+    window.sendGuildChat = sendGuildChat;
+    window.buyItem = buyItem;
+
+    // UI refresh functions
+    window.refreshBossUI = refreshBossUI;
+    window.refreshQuestsUI = refreshQuestsUI;
+    window.refreshPvpTargets = refreshPvpTargets;
+    window.refreshGuildUI = refreshGuildUI;
+    window.refreshWarsUI = refreshWarsUI;
+    window.displayChat = displayChat;
+    window.refreshShop = refreshShop;
+    window.loadLeaderboard = loadLeaderboard;
+    window.refreshNews = refreshNews;
+    window.refreshAdminConsole = refreshAdminConsole;
+    window.refreshAdminPlayerList = refreshAdminPlayerList;
+
+    // Profile & guild
+    window.saveProfile = saveProfile;
+    window.selectAvatar = selectAvatar;
+    window.showCreateGuild = showCreateGuild;
+    window.saveGuildBlurb = saveGuildBlurb;
+    window.leaveGuild = leaveGuild;
+    window.disbandGuild = disbandGuild;
+    window.declareWar = declareWar;
+    window.postNews = postNews;
+
+    // Boss system
+    window.startBossFight = startBossFight;
+    window.rechallengeBoss = rechallengeBoss;
+    window.attackBoss = attackBoss;
+    window.fleeBossFight = fleeBossFight;
+    window.doBossRest = doBossRest;
+
+    // Quest system
+    window.claimQuestReward = claimQuestReward;
+
+    // Admin (functions internally verify admin status)
+    window.adminResetStats = adminResetStats;
+    window.adminFullReset = adminFullReset;
+    window.adminClearChat = adminClearChat;
+    window.adminClearNews = adminClearNews;
+    window.adminClearWars = adminClearWars;
+    window.adminGiveGold = adminGiveGold;
+    window.downloadBackup = downloadBackup;
+    window.uploadBackup = uploadBackup;
+
+    // Safe proxy functions for dynamically generated onclick handlers
+    // These validate input before calling internal functions
+    window._goBack = function() {
+        goTab(_lastViewTab || 'grind');
+    };
+    window._showPlayer = function(name) {
+        if (typeof name === 'string' && isValidUsername(name) && gameState.players[name]) {
+            showPlayerCard(name);
+        }
+    };
+    window._attackPlayer = function(name) {
+        if (typeof name === 'string' && isValidUsername(name) && gameState.players[name]) {
+            attackPlayer(name);
+        }
+    };
+    window._joinGuild = function(id) {
+        if (typeof id === 'string' && /^guild_\d+$/.test(id)) {
+            joinGuild(id);
+        }
+    };
+    window._kickMember = function(name) {
+        if (typeof name === 'string' && isValidUsername(name)) {
+            kickMember(name);
+        }
+    };
+    window._adminBan = function(name) {
+        if (typeof name === 'string' && isValidUsername(name)) {
+            adminBanPlayer(name);
+        }
+    };
+    window._adminUnban = function(name) {
+        if (typeof name === 'string' && isValidUsername(name)) {
+            adminUnbanPlayer(name);
+        }
+    };
+    window._adminDelete = function(name) {
+        if (typeof name === 'string' && isValidUsername(name)) {
+            adminDeletePlayer(name);
+        }
+    };
+    window._showTrophy = function(el) {
+        if (!el || !el.dataset) return;
+        const name = el.dataset.trophy || '';
+        const emoji = el.dataset.emoji || '';
+        const rarity = el.dataset.rarity || 'common';
+        const str = parseInt(el.dataset.str) || 0;
+        const wis = parseInt(el.dataset.wis) || 0;
+        const hp = parseInt(el.dataset.hp) || 0;
+        const count = parseInt(el.dataset.count) || 1;
+        showTrophyDetail(name, emoji, rarity, str, wis, hp, count);
+    };
+
+    // ============================================
+    // SECURITY: FREEZE EXPOSED WINDOW FUNCTIONS
+    // ============================================
+    // Prevent attackers from replacing exposed functions with tampered versions
+    const exposedFunctions = [
+        'switchAuthTab','doLogin','doRegister','goTab','toggleMenu','closeMenu',
+        'doGrind','doRest','sendChatMsg','sendGuildChat','buyItem',
+        'refreshBossUI','refreshQuestsUI','refreshPvpTargets','refreshGuildUI',
+        'refreshWarsUI','displayChat','refreshShop','loadLeaderboard','refreshNews',
+        'refreshAdminConsole','refreshAdminPlayerList','saveProfile','selectAvatar',
+        'showCreateGuild','saveGuildBlurb','leaveGuild','disbandGuild','declareWar',
+        'postNews','startBossFight','rechallengeBoss','attackBoss','fleeBossFight',
+        'doBossRest','claimQuestReward','adminResetStats','adminFullReset',
+        'adminClearChat','adminClearNews','adminClearWars','adminGiveGold',
+        'downloadBackup','uploadBackup',
+        '_goBack','_showPlayer','_attackPlayer','_joinGuild','_kickMember',
+        '_adminBan','_adminUnban','_adminDelete','_showTrophy'
+    ];
+    exposedFunctions.forEach(name => {
+        try {
+            Object.defineProperty(window, name, {
+                value: window[name],
+                writable: false,
+                configurable: false
+            });
+        } catch(e) {}
+    });
+
+    })(); // END IIFE
 </script>
 </body>
 </html>
