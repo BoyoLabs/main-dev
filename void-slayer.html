@@ -635,7 +635,8 @@
             wars: gameState.wars,
             news: gameState.news,
             gate: gameState.gate,
-            chat: gameState.chat
+            chat: gameState.chat,
+            lastModified: Date.now()
         }));
     }
 
@@ -714,19 +715,41 @@
                 }
                 
                 if (data.data.gameState) {
-                    const gs = data.data.gameState;
-                    if (gs.players) gameState.players = gs.players;
-                    if (gs.guilds) gameState.guilds = gs.guilds;
-                    if (gs.wars) gameState.wars = gs.wars;
-                    if (gs.news) gameState.news = gs.news;
-                    if (gs.gate) gameState.gate = gs.gate;
-                    if (gs.chat) {
-                        gameState.chat = gs.chat;
-                        gs.chat.forEach(msg => seenChatIds.add(msg.id));
+                    const cloudGs = data.data.gameState;
+                    const localGs = getLocalGameState();
+                    const cloudTime = cloudGs.lastModified || data.data.timestamp || 0;
+                    const localTime = (localGs && localGs.lastModified) ? localGs.lastModified : 0;
+
+                    // Use whichever source is newer
+                    if (localGs && localTime > cloudTime) {
+                        authDebug('<span style="color:#44ff44">Local data is newer (local=' + localTime + ' vs cloud=' + cloudTime + '), keeping local</span>');
+                        // Load local data into gameState
+                        if (localGs.players) gameState.players = localGs.players;
+                        if (localGs.guilds) gameState.guilds = localGs.guilds;
+                        if (localGs.wars) gameState.wars = localGs.wars;
+                        if (localGs.news) gameState.news = localGs.news;
+                        if (localGs.gate) gameState.gate = localGs.gate;
+                        if (localGs.chat) {
+                            gameState.chat = localGs.chat;
+                            localGs.chat.forEach(msg => seenChatIds.add(msg.id));
+                        }
+                        // Push local data to cloud so it catches up
+                        isDirty = true;
+                    } else {
+                        authDebug('Cloud data is newer or same age (cloud=' + cloudTime + ' vs local=' + localTime + '), using cloud');
+                        if (cloudGs.players) gameState.players = cloudGs.players;
+                        if (cloudGs.guilds) gameState.guilds = cloudGs.guilds;
+                        if (cloudGs.wars) gameState.wars = cloudGs.wars;
+                        if (cloudGs.news) gameState.news = cloudGs.news;
+                        if (cloudGs.gate) gameState.gate = cloudGs.gate;
+                        if (cloudGs.chat) {
+                            gameState.chat = cloudGs.chat;
+                            cloudGs.chat.forEach(msg => seenChatIds.add(msg.id));
+                        }
                     }
                 }
                 
-                // Cloud loaded successfully — also save to localStorage as cache
+                // Save merged/resolved state to localStorage as cache
                 saveLocalGameState();
                 cloudAvailable = true;
                 updateCloudStatus('Connected', '#44ff44');
@@ -734,9 +757,15 @@
                 addLog("<span style='color:#44ff44'>✓ Loaded from cloud</span>");
                 return true;
             } else {
+                // Cloud is empty — try loading local data
                 cloudAvailable = true;
-                authDebug('Cloud connected but empty (no data yet)');
-                updateCloudStatus('Connected (empty)', '#ffaa00');
+                if (loadLocalGameState()) {
+                    authDebug('Cloud empty, loaded local data');
+                    isDirty = true; // Push local data to cloud
+                } else {
+                    authDebug('Cloud connected but empty (no data yet)');
+                }
+                updateCloudStatus('Connected', '#44ff44');
                 return true;
             }
         } catch (err) {
@@ -784,7 +813,8 @@
                     wars: gameState.wars,
                     news: gameState.news,
                     gate: gameState.gate,
-                    chat: gameState.chat
+                    chat: gameState.chat,
+                    lastModified: Date.now()
                 },
                 timestamp: Date.now()
             };
@@ -3732,14 +3762,64 @@
         }, 30000);
     });
 
-    // Cleanup on page unload
+    // Cleanup on page unload — use sendBeacon for reliable cloud save
     window.addEventListener('beforeunload', () => {
         if (currentUser && p) {
             p.online = false;
-            saveLocalGameState(); // Always save locally
-            saveToCloud(true); // Attempt final cloud save
+            saveLocalGameState(); // Always save locally (synchronous)
+            // Use sendBeacon for reliable delivery — browser guarantees it completes
+            if (cloudAvailable) {
+                try {
+                    const realm = document.getElementById('realm-name')?.value.trim() || 'void-realm-default';
+                    const payload = JSON.stringify({
+                        realm: realm,
+                        accounts: getAccounts(),
+                        gameState: {
+                            players: gameState.players,
+                            guilds: gameState.guilds,
+                            wars: gameState.wars,
+                            news: gameState.news,
+                            gate: gameState.gate,
+                            chat: gameState.chat,
+                            lastModified: Date.now()
+                        },
+                        timestamp: Date.now()
+                    });
+                    navigator.sendBeacon(CLOUD_CONFIG.webAppUrl, payload);
+                } catch (e) {
+                    // sendBeacon failed, but localStorage is already saved
+                }
+            }
         }
         stopCloudSync();
+    });
+
+    // Also save when tab becomes hidden (covers phone screen-off, tab switch, etc.)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden' && currentUser && p) {
+            saveLocalGameState();
+            if (cloudAvailable && isDirty) {
+                try {
+                    const realm = document.getElementById('realm-name')?.value.trim() || 'void-realm-default';
+                    const payload = JSON.stringify({
+                        realm: realm,
+                        accounts: getAccounts(),
+                        gameState: {
+                            players: gameState.players,
+                            guilds: gameState.guilds,
+                            wars: gameState.wars,
+                            news: gameState.news,
+                            gate: gameState.gate,
+                            chat: gameState.chat,
+                            lastModified: Date.now()
+                        },
+                        timestamp: Date.now()
+                    });
+                    navigator.sendBeacon(CLOUD_CONFIG.webAppUrl, payload);
+                    isDirty = false;
+                } catch (e) {}
+            }
+        }
     });
 
     // ============================================
