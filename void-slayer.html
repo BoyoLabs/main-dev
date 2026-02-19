@@ -127,6 +127,17 @@
         /* Void Entity glow */
         .boss-card.void-entity-card { border-color: #ff8800; box-shadow: 0 0 15px rgba(255,136,0,0.15); }
 
+        /* Audio toggle switch */
+        .audio-toggle-wrap { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 0; border-top: 1px solid #1a1a1a; margin-top: 10px; }
+        .audio-toggle-label { font-size: 0.8rem; color: #666; text-transform: uppercase; letter-spacing: 1px; user-select: none; }
+        .audio-toggle-label.active { color: var(--gold); }
+        .toggle-switch { position: relative; width: 42px; height: 22px; cursor: pointer; flex-shrink: 0; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+        .toggle-track { position: absolute; inset: 0; background: #222; border: 1px solid #444; border-radius: 11px; transition: 0.25s; }
+        .toggle-knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: #666; border-radius: 50%; transition: 0.25s; }
+        .toggle-switch input:checked ~ .toggle-track { background: var(--accent); border-color: #cc0000; }
+        .toggle-switch input:checked ~ .toggle-knob { left: 23px; background: var(--gold); }
+
     </style>
 </head>
 <body>
@@ -211,6 +222,14 @@
     <div class="debug" style="margin-top: auto; padding-top: 20px;">
         <span id="player-count">0</span> players online<br>
         <span id="cloud-status" style="color: #888;">Cloud: Idle</span>
+    </div>
+    <div class="audio-toggle-wrap">
+        <span class="audio-toggle-label" id="audio-label">Sound</span>
+        <label class="toggle-switch">
+            <input type="checkbox" id="audio-toggle" onchange="toggleAudio()">
+            <span class="toggle-track"></span>
+            <span class="toggle-knob"></span>
+        </label>
     </div>
 </nav>
 
@@ -444,15 +463,18 @@
     var BGM_URL = 'https://opengameart.org/sites/default/files/Dark%20Clouds%20Covering%20The%20Horizon%20-%20Loading%20Background%20Music.wav';
     var ATTACK_SFX_URL = 'https://opengameart.org/sites/default/files/best_snare_0.wav';
 
+    // --- State ---
+    var audioEnabled = false;
+    var bgmPlaying = false;
+    var bgmBlessed = false;
+    var sfxUnlocked = false;
+
     // --- BGM setup ---
     var bgmAudio = new Audio();
     bgmAudio.src = BGM_URL;
     bgmAudio.loop = true;
     bgmAudio.volume = 0.35;
     bgmAudio.preload = 'auto';
-
-    var bgmPlaying = false;
-    var bgmBlessed = false; // true once we've called play() in a gesture
 
     // --- Attack SFX pool ---
     var POOL_SIZE = 5;
@@ -465,44 +487,56 @@
         attackPool.push(a);
     }
     var attackIdx = 0;
-    var sfxUnlocked = false;
 
-    // Try to start BGM. Called from gesture AND from canplaythrough.
+    // Load saved preference (off by default)
+    try {
+        audioEnabled = localStorage.getItem('void-slayer-audio') === 'on';
+    } catch(e) {}
+
+    // Set toggle checkbox to match saved state on load
+    document.addEventListener('DOMContentLoaded', function() {
+        var cb = document.getElementById('audio-toggle');
+        var label = document.getElementById('audio-label');
+        if (cb) cb.checked = audioEnabled;
+        if (label && audioEnabled) label.classList.add('active');
+    });
+
     function tryPlayBGM() {
-        if (bgmPlaying) return;
+        if (bgmPlaying || !audioEnabled) return;
         var promise = bgmAudio.play();
         if (promise) {
-            promise.then(function() {
-                bgmPlaying = true;
-            }).catch(function() {
-                // Not ready yet or blocked — canplaythrough listener will retry
-            });
+            promise.then(function() { bgmPlaying = true; }).catch(function() {});
         }
     }
 
-    // When BGM has enough data buffered, try playing if we already blessed it
+    function stopBGM() {
+        try {
+            bgmAudio.pause();
+            bgmAudio.currentTime = 0;
+        } catch(e) {}
+        bgmPlaying = false;
+    }
+
+    // Retry BGM once data is buffered
     bgmAudio.addEventListener('canplaythrough', function() {
-        if (bgmBlessed && !bgmPlaying) {
-            tryPlayBGM();
-        }
+        if (bgmBlessed && audioEnabled && !bgmPlaying) tryPlayBGM();
     });
-
-    // Also retry when we get any new data, in case canplaythrough already fired
     bgmAudio.addEventListener('canplay', function() {
-        if (bgmBlessed && !bgmPlaying) {
-            tryPlayBGM();
-        }
+        if (bgmBlessed && audioEnabled && !bgmPlaying) tryPlayBGM();
     });
 
-    function unlockAudio() {
-        // --- Bless + play BGM ---
+    // Bless audio elements on first interaction after toggle is on
+    function blessAudio() {
+        if (!audioEnabled) return;
+
+        // Bless BGM
         if (!bgmBlessed) {
             bgmBlessed = true;
-            bgmAudio.load(); // kick the download on mobile (some won't preload)
+            bgmAudio.load();
             tryPlayBGM();
         }
 
-        // --- Bless attack SFX pool ---
+        // Bless SFX pool
         if (!sfxUnlocked) {
             sfxUnlocked = true;
             attackPool.forEach(function(el) {
@@ -514,35 +548,66 @@
                         el.pause();
                         el.currentTime = 0;
                         el.volume = origVol;
-                    }).catch(function() {
-                        el.volume = origVol;
-                    });
+                    }).catch(function() { el.volume = origVol; });
                 }
             });
         }
 
-        // If both are going, remove listeners
+        // If blessed, stop listening
         if (bgmBlessed && sfxUnlocked) {
-            document.removeEventListener('click', unlockAudio, true);
-            document.removeEventListener('touchstart', unlockAudio, true);
-            document.removeEventListener('touchend', unlockAudio, true);
-            document.removeEventListener('keydown', unlockAudio, true);
+            document.removeEventListener('click', blessAudio, true);
+            document.removeEventListener('touchstart', blessAudio, true);
+            document.removeEventListener('touchend', blessAudio, true);
+            document.removeEventListener('keydown', blessAudio, true);
         }
     }
 
-    document.addEventListener('click', unlockAudio, true);
-    document.addEventListener('touchstart', unlockAudio, true);
-    document.addEventListener('touchend', unlockAudio, true);
-    document.addEventListener('keydown', unlockAudio, true);
+    document.addEventListener('click', blessAudio, true);
+    document.addEventListener('touchstart', blessAudio, true);
+    document.addEventListener('touchend', blessAudio, true);
+    document.addEventListener('keydown', blessAudio, true);
 
     function playAttackSound() {
-        if (!sfxUnlocked) return;
+        if (!audioEnabled || !sfxUnlocked) return;
         var el = attackPool[attackIdx];
         attackIdx = (attackIdx + 1) % POOL_SIZE;
         el.currentTime = 0;
         var p = el.play();
         if (p) p.catch(function() {});
     }
+
+    // Toggle handler — called from the checkbox onchange
+    window.toggleAudio = function() {
+        var cb = document.getElementById('audio-toggle');
+        var label = document.getElementById('audio-label');
+        audioEnabled = cb && cb.checked;
+
+        if (label) {
+            if (audioEnabled) label.classList.add('active');
+            else label.classList.remove('active');
+        }
+
+        // Save to localStorage
+        try { localStorage.setItem('void-slayer-audio', audioEnabled ? 'on' : 'off'); } catch(e) {}
+
+        if (audioEnabled) {
+            // If not blessed yet, the capturing listeners will handle it on next interaction
+            // If already blessed, start BGM now
+            if (bgmBlessed) {
+                tryPlayBGM();
+            } else {
+                // Re-attach listeners in case they were removed
+                document.addEventListener('click', blessAudio, true);
+                document.addEventListener('touchstart', blessAudio, true);
+                document.addEventListener('touchend', blessAudio, true);
+                document.addEventListener('keydown', blessAudio, true);
+                // The toggle click itself is a gesture — bless immediately
+                blessAudio();
+            }
+        } else {
+            stopBGM();
+        }
+    };
 
     // ============================================
     // SECURITY: HTML SANITIZATION
@@ -4063,7 +4128,7 @@
         'postNews','startBossFight','rechallengeBoss','attackBoss','fleeBossFight',
         'doBossRest','claimQuestReward','adminResetStats','adminFullReset',
         'adminClearChat','adminClearNews','adminClearWars','adminGiveGold',
-        'downloadBackup','uploadBackup',
+        'downloadBackup','uploadBackup','toggleAudio',
         '_goBack','_showPlayer','_attackPlayer','_joinGuild','_kickMember',
         '_adminBan','_adminUnban','_adminDelete','_showTrophy'
     ];
