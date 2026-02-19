@@ -1,6 +1,6 @@
-# Main Dev
+# Main Dev - (aka prod)
 
-This repo is dedicated to my single page web apps, programming and other scripting. WIPs may or may not be included -- if a project gets abandoned, it will be put up here because there is no more work being done on it, so maybe someone wants to pick it up.
+This repo is dedicated to my single page web apps, programming and other scripting. WIPs may or may not be included -- if a project gets abandoned, it will be put up here because there is no more work being done on it, so maybe someone wants to pick it up. Further versions of this repo after 15 items is named prod. Prod will just mean that it is either working or in a state that is sufficient to be taken over.
 
 ---
 
