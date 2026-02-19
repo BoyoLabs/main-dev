@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com https://script.googleusercontent.com; img-src 'self' data:; media-src https://opengameart.org; form-action 'none'; base-uri 'none'; object-src 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com https://script.googleusercontent.com; img-src 'self' data:; media-src 'self' https://opengameart.org; form-action 'none'; base-uri 'none'; object-src 'none';">
     <title>VOID-SLAYER | Cloud MMORPG</title>
     <style>
         :root { --bg: #050508; --panel: #111116; --accent: #8b0000; --gold: #d4af37; --text: #aaa; --admin: #ff00ff; }
@@ -439,42 +439,94 @@
     (function() {
 
     // ============================================
-    // AUDIO SYSTEM
+    // AUDIO SYSTEM (HTML Audio + mobile unlock)
     // ============================================
     const BGM_URL = 'https://opengameart.org/sites/default/files/Dark%20Clouds%20Covering%20The%20Horizon%20-%20Loading%20Background%20Music.wav';
     const ATTACK_SFX_URL = 'https://opengameart.org/sites/default/files/best_snare_0.wav';
 
-    let bgm = null;
-    let bgmStarted = false;
+    // Pre-create audio elements immediately so browsers can begin loading
+    const bgmAudio = new Audio();
+    bgmAudio.src = BGM_URL;
+    bgmAudio.loop = true;
+    bgmAudio.volume = 0.35;
+    bgmAudio.preload = 'auto';
 
-    function initBGM() {
-        if (bgmStarted) return;
-        bgmStarted = true;
-        try {
-            bgm = new Audio(BGM_URL);
-            bgm.loop = true;
-            bgm.volume = 0.35;
-            bgm.play().catch(() => {});
-        } catch(e) {}
+    // Pool of attack sound elements (allows overlapping hits)
+    const POOL_SIZE = 5;
+    const attackPool = [];
+    for (let i = 0; i < POOL_SIZE; i++) {
+        const a = new Audio();
+        a.src = ATTACK_SFX_URL;
+        a.volume = 0.5;
+        a.preload = 'auto';
+        attackPool.push(a);
+    }
+    let attackIdx = 0;
+
+    let audioUnlocked = false;
+
+    function unlockAudio() {
+        if (audioUnlocked) return;
+        audioUnlocked = true;
+
+        // Play BGM — this is called directly inside a user gesture handler
+        const bgmPromise = bgmAudio.play();
+        if (bgmPromise) {
+            bgmPromise.catch(function() {
+                // If play failed, try again on next gesture
+                audioUnlocked = false;
+            });
+        }
+
+        // "Warm up" the attack sound pool by briefly playing each at 0 volume
+        // This unlocks them on iOS/Android so future .play() calls work
+        attackPool.forEach(function(a) {
+            const origVol = a.volume;
+            a.volume = 0;
+            var warmPromise = a.play();
+            if (warmPromise) {
+                warmPromise.then(function() {
+                    a.pause();
+                    a.currentTime = 0;
+                    a.volume = origVol;
+                }).catch(function() {
+                    a.volume = origVol;
+                });
+            }
+        });
+
+        // Also resume any AudioContext (Safari sometimes creates one implicitly)
+        if (window.AudioContext || window.webkitAudioContext) {
+            try {
+                var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (ctx.state === 'suspended') ctx.resume();
+                // Close it since we don't actually use it, just need to poke the audio system
+                setTimeout(function() { ctx.close(); }, 1000);
+            } catch(e) {}
+        }
+
+        // Remove listeners only if unlock succeeded
+        if (audioUnlocked) {
+            document.removeEventListener('click', unlockAudio, true);
+            document.removeEventListener('touchstart', unlockAudio, true);
+            document.removeEventListener('touchend', unlockAudio, true);
+            document.removeEventListener('keydown', unlockAudio, true);
+        }
     }
 
-    // Start BGM on first user interaction (browsers require user gesture for autoplay)
-    function onFirstInteraction() {
-        initBGM();
-        document.removeEventListener('click', onFirstInteraction);
-        document.removeEventListener('keydown', onFirstInteraction);
-        document.removeEventListener('touchstart', onFirstInteraction);
-    }
-    document.addEventListener('click', onFirstInteraction);
-    document.addEventListener('keydown', onFirstInteraction);
-    document.addEventListener('touchstart', onFirstInteraction);
+    // Use capturing phase so we fire before anything else
+    document.addEventListener('click', unlockAudio, true);
+    document.addEventListener('touchstart', unlockAudio, true);
+    document.addEventListener('touchend', unlockAudio, true);
+    document.addEventListener('keydown', unlockAudio, true);
 
     function playAttackSound() {
-        try {
-            const sfx = new Audio(ATTACK_SFX_URL);
-            sfx.volume = 0.5;
-            sfx.play().catch(() => {});
-        } catch(e) {}
+        if (!audioUnlocked) return;
+        var a = attackPool[attackIdx];
+        attackIdx = (attackIdx + 1) % POOL_SIZE;
+        a.currentTime = 0;
+        var p = a.play();
+        if (p) p.catch(function() {});
     }
 
     // ============================================
