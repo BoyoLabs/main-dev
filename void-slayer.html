@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com https://script.googleusercontent.com; img-src 'self' data:; form-action 'none'; base-uri 'none'; object-src 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com https://script.googleusercontent.com; img-src 'self' data:; media-src https://opengameart.org; form-action 'none'; base-uri 'none'; object-src 'none';">
     <title>VOID-SLAYER | Cloud MMORPG</title>
     <style>
         :root { --bg: #050508; --panel: #111116; --accent: #8b0000; --gold: #d4af37; --text: #aaa; --admin: #ff00ff; }
@@ -437,6 +437,45 @@
     // SECURITY: IIFE ENCAPSULATION
     // ============================================
     (function() {
+
+    // ============================================
+    // AUDIO SYSTEM
+    // ============================================
+    const BGM_URL = 'https://opengameart.org/sites/default/files/Dark%20Clouds%20Covering%20The%20Horizon%20-%20Loading%20Background%20Music.wav';
+    const ATTACK_SFX_URL = 'https://opengameart.org/sites/default/files/best_snare_0.wav';
+
+    let bgm = null;
+    let bgmStarted = false;
+
+    function initBGM() {
+        if (bgmStarted) return;
+        bgmStarted = true;
+        try {
+            bgm = new Audio(BGM_URL);
+            bgm.loop = true;
+            bgm.volume = 0.35;
+            bgm.play().catch(() => {});
+        } catch(e) {}
+    }
+
+    // Start BGM on first user interaction (browsers require user gesture for autoplay)
+    function onFirstInteraction() {
+        initBGM();
+        document.removeEventListener('click', onFirstInteraction);
+        document.removeEventListener('keydown', onFirstInteraction);
+        document.removeEventListener('touchstart', onFirstInteraction);
+    }
+    document.addEventListener('click', onFirstInteraction);
+    document.addEventListener('keydown', onFirstInteraction);
+    document.addEventListener('touchstart', onFirstInteraction);
+
+    function playAttackSound() {
+        try {
+            const sfx = new Audio(ATTACK_SFX_URL);
+            sfx.volume = 0.5;
+            sfx.play().catch(() => {});
+        } catch(e) {}
+    }
 
     // ============================================
     // SECURITY: HTML SANITIZATION
@@ -1250,6 +1289,7 @@
             return;
         }
         
+        playAttackSound();
         gameAction(() => {
         const baseXpGain = Math.floor(10 + Math.random() * 20);
         const wisMultiplier = 1 + (p.wis / 100);
@@ -1540,6 +1580,7 @@
         const theirPower = target.level * 10 + target.str * 5;
         const chance = myPower / (myPower + theirPower);
         
+        playAttackSound();
         gameAction(() => {
         if (Math.random() < chance) {
             const goldStolen = target.gold;
@@ -3296,6 +3337,7 @@
         const boss = findBossDef(activeBossFight.bossId);
         if (!boss) return;
 
+        playAttackSound();
         gameAction(() => {
             // Player attacks boss
             const playerDamage = Math.floor(p.str * (1.5 + Math.random() * 0.5));
