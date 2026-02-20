@@ -1435,12 +1435,16 @@
                         }
                     }
                 });
-                // Remove guilds that were disbanded in cloud
-                Object.keys(gameState.guilds).forEach(gid => {
-                    if (!cloud.guilds[gid]) {
-                        delete gameState.guilds[gid];
-                    }
-                });
+                // Remove guilds that were disbanded in cloud — but ONLY if we have
+                // no pending local changes. If isDirty, our local guilds may include
+                // newly created ones that haven't been pushed to cloud yet.
+                if (!isDirty) {
+                    Object.keys(gameState.guilds).forEach(gid => {
+                        if (!cloud.guilds[gid]) {
+                            delete gameState.guilds[gid];
+                        }
+                    });
+                }
             }
             
             // Merge wars
