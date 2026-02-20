@@ -6,6 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com https://script.googleusercontent.com; img-src 'self' data: https://i.imgur.com; media-src 'self' https://opengameart.org; form-action 'none'; base-uri 'none'; object-src 'none';">
     <title>VOID-SLAYER | Cloud MMORPG</title>
+    <!-- Preload key images to eliminate load-jank on desktop -->
+    <link rel="preload" as="image" href="https://i.imgur.com/2w3qzgz.png">
+    <link rel="preload" as="image" href="https://i.imgur.com/g2nk15h.png">
+    <link rel="preload" as="image" href="https://i.imgur.com/qU33C36.png">
+    <link rel="preload" as="image" href="https://i.imgur.com/HhpmUBd.png">
+    <link rel="preload" as="image" href="https://i.imgur.com/oSwXMcr.png">
+    <link rel="preload" as="image" href="https://i.imgur.com/lkyNHJE.png">
     <style>
         :root { --bg: #050508; --panel: #111116; --accent: #8b0000; --gold: #d4af37; --text: #aaa; --admin: #ff00ff; }
         * { box-sizing: border-box; }
@@ -25,6 +32,9 @@
         input, select { background: #111; border: 1px solid #333; color: white; padding: 12px; margin-bottom: 12px; width: 260px; box-sizing: border-box; }
         .hidden { display: none !important; }
         .debug { font-size: 0.75rem; color: #555; margin-top: 10px; font-family: monospace; }
+
+        /* Pixel art images — crisp rendering */
+        .pixel-img { image-rendering: pixelated; image-rendering: crisp-edges; }
 
         /* Auth form styles */
         .auth-card { background: rgba(20, 20, 25, 0.98); border: 1px solid #333; padding: 30px 40px; display: flex; flex-direction: column; align-items: center; max-width: 400px; width: 100%; }
@@ -148,7 +158,7 @@
 <body>
 
 <div id="auth-screen">
-    <img src="https://i.imgur.com/2w3qzgz.png" alt="VOID-SLAYER" style="max-width: min(320px, 70vw); max-height: 18vh; width: auto; height: auto; object-fit: contain; margin-bottom: 6px;">
+    <img src="https://i.imgur.com/2w3qzgz.png" alt="VOID-SLAYER" width="320" height="320" loading="eager" decoding="async" style="max-width: min(320px, 70vw); max-height: 18vh; width: auto; height: auto; object-fit: contain; margin-bottom: 6px;">
     <div style="letter-spacing: 0.55em; font-size: 0.78rem; font-family: 'Crimson Text', serif; text-transform: uppercase; color: #b0b0b8; background: linear-gradient(90deg, #666 0%, #ccc 40%, #fff 50%, #ccc 60%, #666 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-shadow: none; filter: drop-shadow(0 0 6px rgba(139,0,0,0.55)); margin-bottom: 18px; padding-left: 0.55em;">— &nbsp;A L I V E &nbsp;—</div>
 
     <div class="auth-card">
@@ -276,7 +286,7 @@
             <div class="card">
                 <h2>The Frontier</h2>
                 <p>The dark frontier sprawls before you, teeming with shadowy foes. Your blade thirsts for blood.</p>
-                <div style="margin: 10px 0;"><img src="https://i.imgur.com/g2nk15h.png" alt="Void Wraith" style="max-width: 120px; max-height: 120px; width: auto; height: auto; image-rendering: pixelated;"></div>
+                <div style="margin: 10px 0;"><img src="https://i.imgur.com/g2nk15h.png" alt="Void Wraith" width="120" height="120" loading="eager" decoding="async" style="max-width: 120px; max-height: 120px; width: auto; height: auto; image-rendering: pixelated;"></div>
                 <button class="action-btn" onclick="doGrind()">Slay Minions</button>
                 <button class="action-btn" onclick="doRest()" style="background:#1a3a1a; border-color:#2a5a2a;">🛌 Rest (Restore 50% HP)</button>
             </div>
@@ -1019,7 +1029,19 @@
             
             if (data.success && data.data) {
                 if (data.data.accounts) {
-                    saveAccounts(data.data.accounts);
+                    // MERGE cloud accounts with local accounts instead of overwriting.
+                    // This prevents wiping locally-created accounts that haven't
+                    // been pushed to the cloud yet (fixes register→login race condition).
+                    const localAccounts = getAccounts();
+                    const cloudAccounts = data.data.accounts;
+                    const mergedAccounts = Object.assign({}, localAccounts, cloudAccounts);
+                    // Preserve any local-only accounts (recently registered)
+                    Object.keys(localAccounts).forEach(name => {
+                        if (!cloudAccounts[name]) {
+                            mergedAccounts[name] = localAccounts[name];
+                        }
+                    });
+                    saveAccounts(mergedAccounts);
                 }
                 
                 if (data.data.gameState) {
@@ -1032,6 +1054,16 @@
                     if (cloudGs.players) {
                         // Start with cloud players (everyone else's latest data)
                         gameState.players = cloudGs.players;
+                    }
+                    // Preserve any local-only players (recently registered, not yet in cloud)
+                    if (localGs && localGs.players) {
+                        Object.keys(localGs.players).forEach(name => {
+                            if (!gameState.players[name]) {
+                                authDebug('<span style="color:#44ff44">Preserving local-only player: ' + name + '</span>');
+                                gameState.players[name] = localGs.players[name];
+                                isDirty = true; // Push to cloud on next save
+                            }
+                        });
                     }
                     // If we have local data, check if our specific player is newer locally
                     if (localGs && localGs.players && currentUser && localGs.players[currentUser]) {
@@ -1372,9 +1404,17 @@
                 });
             }
             
-            // Update accounts cache
+            // Merge accounts cache (don't overwrite local-only accounts)
             if (data.data.accounts) {
-                saveAccounts(data.data.accounts);
+                const localAccounts = getAccounts();
+                const cloudAccounts = data.data.accounts;
+                const mergedAccounts = Object.assign({}, localAccounts, cloudAccounts);
+                Object.keys(localAccounts).forEach(name => {
+                    if (!cloudAccounts[name]) {
+                        mergedAccounts[name] = localAccounts[name];
+                    }
+                });
+                saveAccounts(mergedAccounts);
             }
             
             // Merge in new chat messages we haven't seen
@@ -1711,7 +1751,7 @@
         regBtn.disabled = true;
         
         try {
-            // Load from cloud first
+            // Load from cloud first to check for existing accounts
             await loadFromCloud();
             
             const accounts = getAccounts();
@@ -1724,9 +1764,36 @@
             const hashedPw = await hashPassword(password, username);
             accounts[username] = { password: hashedPw, race };
             saveAccounts(accounts);
-            markDirty();
+
+            // Also create the player data immediately so it's included in the cloud push
+            gameState.players[username] = {
+                race: race,
+                level: 1, xp: 0, hp: 100, maxHp: 100,
+                str: race === 'Hollow' ? 11 : 10,
+                wis: race === 'Wraith' ? 11 : 10,
+                gold: 0, guild: null, kills: 0, deaths: 0,
+                online: false, lastSeen: Date.now(), createdAt: Date.now(),
+                bossData: {}, trophies: [], voidEntityTier: 0,
+                dailyQuests: null, dailyQuestsLastReset: 0,
+                warTrophyWins: 0, totalGoldSpent: 0, totalBossKills: 0
+            };
+            saveLocalGameState();
+
+            // Force-push to cloud IMMEDIATELY and wait for confirmation.
+            // This ensures the account exists in the cloud database before
+            // the user attempts to log in (fixes register→login race condition).
+            isDirty = true;
+            regBtn.textContent = 'Syncing to cloud...';
+            const cloudOk = await saveToCloud(true);
             
-            successDiv.innerText = '✓ Account created! You may now login.';
+            if (cloudOk) {
+                successDiv.innerText = '✓ Account created & synced! You may now login.';
+                authDebug('<span style="color:#44ff44">Account synced to cloud OK</span>');
+            } else {
+                // Cloud failed but account is saved locally — still allow login
+                successDiv.innerText = '✓ Account created locally. Cloud sync will retry.';
+                authDebug('<span style="color:#ffaa00">Account saved locally, cloud sync pending</span>');
+            }
             
             setTimeout(() => {
                 switchAuthTab('login');
@@ -3564,7 +3631,7 @@
             ]
         },
         {
-            id: 'void_sentinel', name: 'Void Sentinel', emoji: '🗿', tier: 3, unlockLevel: 30,
+            id: 'void_sentinel', name: 'Void Sentinel', emoji: '', image: 'https://i.imgur.com/oSwXMcr.png', tier: 3, unlockLevel: 30,
             desc: 'An eternal guardian of the void gates, unyielding and relentless.',
             rewardType: 'xp', baseHp: 2200, baseDamage: 30, hpPerLevel: 100, dmgPerLevel: 2.0,
             xpReward: 2500, goldReward: 0, regenPerMin: 55,
@@ -3577,7 +3644,7 @@
             ]
         },
         {
-            id: 'abyssal_leviathan', name: 'Abyssal Leviathan', emoji: '🐙', tier: 4, unlockLevel: 40,
+            id: 'abyssal_leviathan', name: 'Abyssal Leviathan', emoji: '', image: 'https://i.imgur.com/lkyNHJE.png', tier: 4, unlockLevel: 40,
             desc: 'A nightmare from the deepest trenches of the void ocean.',
             rewardType: 'gold', baseHp: 3500, baseDamage: 38, hpPerLevel: 120, dmgPerLevel: 2.2,
             xpReward: 0, goldReward: 5000, regenPerMin: 70,
@@ -3787,7 +3854,7 @@
             html += `<div class="boss-card${unlocked ? '' : ' locked'}">`;
             html += `<div class="boss-tier" style="background:${defeated ? 'rgba(0,100,0,0.5); color:#44ff44;' : 'rgba(139,0,0,0.5); color:#ff6666;'}">${defeated ? '✓ DEFEATED' : unlocked ? 'AVAILABLE' : `🔒 LV ${boss.unlockLevel}`}</div>`;
             html += `<h3 style="margin:0 0 5px 0; color:${defeated ? '#44ff44' : 'var(--gold)'};">${boss.emoji} ${boss.name} <span style="color:#666; font-size:0.8rem;">Tier ${boss.tier}</span></h3>`;
-            if (boss.image) html += `<div style="margin: 6px 0;"><img src="${boss.image}" alt="${sanitize(boss.name)}" style="max-width:100px; max-height:100px; width:auto; height:auto; image-rendering:pixelated;"></div>`;
+            if (boss.image) html += `<div style="margin: 6px 0;"><img src="${boss.image}" alt="${sanitize(boss.name)}" width="100" height="100" decoding="async" style="max-width:100px; max-height:100px; width:auto; height:auto; image-rendering:pixelated;"></div>`;
             html += `<p style="color:#888; font-size:0.85rem; margin:5px 0;">${boss.desc}</p>`;
 
             if (unlocked) {
@@ -3885,7 +3952,7 @@
         let html = `<div style="border:2px solid var(--accent); padding:20px; background:#0a0a0a;">`;
         html += `<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">`;
         html += `<h3 style="margin:0; color:var(--gold);">${boss.emoji} ${boss.name}</h3>`;
-        if (boss.image) html += `<img src="${boss.image}" alt="${sanitize(boss.name)}" style="max-width:80px; max-height:80px; width:auto; height:auto; image-rendering:pixelated;">`;
+        if (boss.image) html += `<img src="${boss.image}" alt="${sanitize(boss.name)}" width="80" height="80" decoding="async" style="max-width:80px; max-height:80px; width:auto; height:auto; image-rendering:pixelated;">`;
         html += `<button class="action-btn" onclick="fleeBossFight()" style="background:#333; font-size:0.8rem;">🚪 Flee</button>`;
         html += `</div>`;
 
