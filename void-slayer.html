@@ -2692,24 +2692,39 @@
                 const member = gameState.players[memberName];
                 member.gold += REWARD_PER_PLAYER;
                 
-                // Award Epic War Trophy (tracks total wins)
+                // Award Legendary War Trophy (tracks total wins, gives stat boost)
                 if (!member.warTrophyWins) member.warTrophyWins = 0;
                 member.warTrophyWins++;
+                
+                // War trophy stat boost — balanced across all stats (applied each win)
+                const WAR_TROPHY_STR = 20;
+                const WAR_TROPHY_WIS = 20;
+                const WAR_TROPHY_HP = 100;
+                
+                // Apply permanent stat boosts
+                member.str += WAR_TROPHY_STR;
+                member.wis += WAR_TROPHY_WIS;
+                member.maxHp += WAR_TROPHY_HP;
+                member.hp = Math.min(member.hp + WAR_TROPHY_HP, member.maxHp);
                 
                 // Update or add the War Hero Trophy in trophies array
                 if (!member.trophies) member.trophies = [];
                 const existingWarTrophy = member.trophies.find(t => t.name === 'War Hero Trophy');
                 if (existingWarTrophy) {
-                    // Update existing trophy display — no stat bonus
+                    // Update existing trophy — accumulate stats per win
                     existingWarTrophy.count = member.warTrophyWins;
+                    existingWarTrophy.rarity = 'legendary';
+                    existingWarTrophy.str = WAR_TROPHY_STR * member.warTrophyWins;
+                    existingWarTrophy.wis = WAR_TROPHY_WIS * member.warTrophyWins;
+                    existingWarTrophy.hp = WAR_TROPHY_HP * member.warTrophyWins;
                 } else {
                     member.trophies.push({
                         name: 'War Hero Trophy',
                         emoji: '⚔️',
-                        rarity: 'epic',
-                        str: 0,
-                        wis: 0,
-                        hp: 0,
+                        rarity: 'legendary',
+                        str: WAR_TROPHY_STR,
+                        wis: WAR_TROPHY_WIS,
+                        hp: WAR_TROPHY_HP,
                         fromBoss: 'guild_war',
                         earnedAt: Date.now(),
                         count: member.warTrophyWins
@@ -2725,9 +2740,9 @@
             ? `${war.attackerKills} - ${war.defenderKills}`
             : `${war.defenderKills} - ${war.attackerKills}`;
         
-        sendSystemChat(`🏆 WAR ENDED! 【${winnerGuild.tag}】 has defeated 【${loserGuild.tag}】! Final Score: ${finalScore}. ${rewardedCount} warriors rewarded ${REWARD_PER_PLAYER.toLocaleString()} gold + ⚔️ Epic War Trophy each!`);
+        sendSystemChat(`🏆 WAR ENDED! 【${winnerGuild.tag}】 has defeated 【${loserGuild.tag}】! Final Score: ${finalScore}. ${rewardedCount} warriors rewarded ${REWARD_PER_PLAYER.toLocaleString()} gold + ⚔️ Legendary War Hero Trophy each!`);
         
-        addLog(`<span style="color:var(--gold); font-weight:bold;">🏆 Your guild has won the war! +${REWARD_PER_PLAYER.toLocaleString()} Gold + ⚔️ War Hero Trophy!</span>`);
+        addLog(`<span style="color:var(--gold); font-weight:bold;">🏆 Your guild has won the war! +${REWARD_PER_PLAYER.toLocaleString()} Gold + ⚔️ Legendary War Hero Trophy (+20 STR, +20 WIS, +100 HP)!</span>`);
         
         markDirty();
         refreshUI();
