@@ -273,6 +273,7 @@
     <div class="content">
         <!-- FRONTIER TAB -->
         <div id="tab-grind">
+            <div id="frontier-war-notice"></div>
             <div class="card">
                 <h2>The Frontier</h2>
                 <p>The dark frontier sprawls before you, teeming with shadowy foes. Your blade thirsts for blood.</p>
@@ -1507,6 +1508,8 @@
             if (currentTab === 'chat') displayChat();
             if (currentTab === 'pvp') refreshPvpTargets();
             if (currentTab === 'leaderboard') loadLeaderboard();
+            if (currentTab === 'grind') updateFrontierWarNotice();
+            if (currentTab === 'guild') refreshGuildUI();
             updatePlayerCount();
             
         } catch (err) {
@@ -1711,6 +1714,7 @@
             sendSystemChat(`⚔ ${username} has entered the Void.`);
             _stampIntegrity();
             checkAndResetDailyQuests();
+            updateFrontierWarNotice();
             authDebug('Login complete!');
         } catch (err) {
             console.warn('Login error:', err);
@@ -1883,6 +1887,11 @@
             }, 50);
         }
         
+        // Update war notice on The Frontier
+        if (tabName === 'grind') {
+            updateFrontierWarNotice();
+        }
+        
         // Load profile data when opening profile tab
         if (tabName === 'profile' && p) {
             const displayNameInput = document.getElementById('profile-displayname');
@@ -1997,6 +2006,8 @@
         refreshUI();
         markDirty();
         });
+        // Update war notice with latest kill counts
+        if (p.guild) updateFrontierWarNotice();
     }
 
     function doRest() {
@@ -2316,10 +2327,10 @@
                 html += '<p style="color:#666;">No guilds found.</p>';
             } else {
                 guilds.forEach(([id, guild]) => {
-                    const isFull = guild.members.length >= 10;
+                    const isFull = guild.members.length >= 5;
                     const safeGuildId = safeAttr(id);
                     html += `<div style="border:1px solid #333; padding:10px; margin-bottom:5px;">`;
-                    html += `<strong style="color:#4af;">【${sanitize(guild.tag)}】${sanitize(guild.name)}</strong> - ${guild.members.length}/10 members`;
+                    html += `<strong style="color:#4af;">【${sanitize(guild.tag)}】${sanitize(guild.name)}</strong> - ${guild.members.length}/5 members`;
                     if (guild.blurb) {
                         html += `<div style="color:#999; font-size:0.85rem; margin-top:4px; font-style:italic;">"${sanitize(guild.blurb)}"</div>`;
                     }
@@ -2348,6 +2359,36 @@
             html += `<h3 style="color:#4af;">【${sanitize(guild.tag)}】${sanitize(guild.name)}</h3>`;
             html += `<p>Leader: ${sanitize(guild.leader)}</p>`;
             
+            // Active war banner(s) in guild hall
+            const guildWars = (gameState.wars || []).filter(w => 
+                w.status === 'active' && (w.attacker === p.guild || w.defender === p.guild)
+            );
+            if (guildWars.length > 0) {
+                guildWars.forEach(w => {
+                    const isAttacker = w.attacker === p.guild;
+                    const enemyTag = isAttacker ? sanitize(w.defenderTag) : sanitize(w.attackerTag);
+                    const enemyName = isAttacker ? sanitize(w.defenderName) : sanitize(w.attackerName);
+                    const ourKills = isAttacker ? (w.attackerKills || 0) : (w.defenderKills || 0);
+                    const theirKills = isAttacker ? (w.defenderKills || 0) : (w.attackerKills || 0);
+                    html += `<div style="background:rgba(139,0,0,0.25); border:1px solid #ff4444; padding:12px 16px; margin:12px 0;">`;
+                    html += `<div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">`;
+                    html += `<span style="font-size:1.2rem;">⚔️</span>`;
+                    html += `<strong style="color:#ff4444; text-transform:uppercase; letter-spacing:1px;">War Active</strong>`;
+                    html += `</div>`;
+                    html += `<div style="color:#ccc; font-size:0.9rem;">`;
+                    html += isAttacker 
+                        ? `Your guild declared war on <strong style="color:#ff6666;">【${enemyTag}】${enemyName}</strong>`
+                        : `<strong style="color:#ff6666;">【${enemyTag}】${enemyName}</strong> has declared war on your guild!`;
+                    html += `</div>`;
+                    html += `<div style="color:#888; font-size:0.85rem; margin-top:8px;">First to 20,000 frontier kills wins!</div>`;
+                    html += `<div style="display:flex; gap:20px; margin-top:8px; font-family:monospace; font-size:0.9rem;">`;
+                    html += `<span style="color:#44ff44;">Our kills: <strong>${ourKills.toLocaleString()}</strong></span>`;
+                    html += `<span style="color:#ff6666;">Their kills: <strong>${theirKills.toLocaleString()}</strong></span>`;
+                    html += `</div>`;
+                    html += `</div>`;
+                });
+            }
+            
             // Show blurb
             if (guild.blurb) {
                 html += `<div style="border-left:3px solid #333; padding:8px 12px; margin:10px 0; color:#999; font-style:italic;">"${sanitize(guild.blurb)}"</div>`;
@@ -2365,7 +2406,7 @@
                 html += `</div>`;
             }
             
-            html += `<p>Members (${guild.members.length}/10):</p>`;
+            html += `<p>Members (${guild.members.length}/5):</p>`;
             
             // List members with kick buttons for leader
             html += '<div style="margin:10px 0;">';
@@ -2414,7 +2455,7 @@
                 }
                 otherGuilds.forEach(([id, g]) => {
                     html += `<div style="border:1px solid #222; padding:10px; margin-bottom:5px;">`;
-                    html += `<strong style="color:#4af;">【${sanitize(g.tag)}】${sanitize(g.name)}</strong> - ${g.members.length}/10 members`;
+                    html += `<strong style="color:#4af;">【${sanitize(g.tag)}】${sanitize(g.name)}</strong> - ${g.members.length}/5 members`;
                     if (g.blurb) {
                         html += `<div style="color:#999; font-size:0.85rem; margin-top:4px; font-style:italic;">"${sanitize(g.blurb)}"</div>`;
                     }
@@ -2505,8 +2546,8 @@
             return;
         }
         
-        if (guild.members.length >= 10) {
-            alert('This guild is full (10/10 members).');
+        if (guild.members.length >= 5) {
+            alert('This guild is full (5/5 members).');
             return;
         }
         
@@ -2644,6 +2685,54 @@
         sendSystemChat(`⚔ WAR! 【${sanitize(guild.tag)}】 has declared war on 【${sanitize(targetGuild.tag)}】! First to 20,000 frontier kills wins!`);
         
         markDirty(true);
+        updateFrontierWarNotice();
+        refreshGuildUI();
+    }
+
+    // ============================================
+    // FRONTIER WAR NOTICE — alerts guild members on The Frontier
+    // ============================================
+    function updateFrontierWarNotice() {
+        const el = document.getElementById('frontier-war-notice');
+        if (!el) return;
+        
+        // No guild or no wars — clear notice
+        if (!p || !p.guild) { el.innerHTML = ''; return; }
+        
+        const activeWars = (gameState.wars || []).filter(w =>
+            w.status === 'active' && (w.attacker === p.guild || w.defender === p.guild)
+        );
+        
+        if (activeWars.length === 0) { el.innerHTML = ''; return; }
+        
+        let html = '';
+        activeWars.forEach(w => {
+            const isAttacker = w.attacker === p.guild;
+            const enemyTag = isAttacker ? sanitize(w.defenderTag) : sanitize(w.attackerTag);
+            const enemyName = isAttacker ? sanitize(w.defenderName) : sanitize(w.attackerName);
+            const ourKills = isAttacker ? (w.attackerKills || 0) : (w.defenderKills || 0);
+            const theirKills = isAttacker ? (w.defenderKills || 0) : (w.attackerKills || 0);
+            const progress = Math.min(100, Math.floor((ourKills / 20000) * 100));
+            
+            html += `<div style="background:rgba(139,0,0,0.2); border:1px solid #ff4444; padding:12px 16px; margin-bottom:12px;">`;
+            html += `<div style="display:flex; align-items:center; gap:8px;">`;
+            html += `<span style="font-size:1.1rem;">⚔️</span>`;
+            html += `<strong style="color:#ff4444; letter-spacing:1px;">AT WAR</strong>`;
+            html += `<span style="color:#ccc; font-size:0.9rem;"> vs <strong style="color:#ff6666;">【${enemyTag}】${enemyName}</strong></span>`;
+            html += `</div>`;
+            html += `<div style="display:flex; gap:16px; margin-top:8px; font-family:monospace; font-size:0.85rem;">`;
+            html += `<span style="color:#44ff44;">Us: <strong>${ourKills.toLocaleString()}</strong></span>`;
+            html += `<span style="color:#ff6666;">Them: <strong>${theirKills.toLocaleString()}</strong></span>`;
+            html += `<span style="color:#888;">Goal: 20,000</span>`;
+            html += `</div>`;
+            html += `<div style="background:#222; height:6px; margin-top:8px; border:1px solid #333; overflow:hidden;">`;
+            html += `<div style="height:100%; width:${progress}%; background:linear-gradient(90deg, var(--accent), #ff4444); transition:width 0.3s;"></div>`;
+            html += `</div>`;
+            html += `<div style="color:#666; font-size:0.75rem; margin-top:4px; text-align:center;">Every minion you slay on the frontier counts toward victory!</div>`;
+            html += `</div>`;
+        });
+        
+        el.innerHTML = html;
     }
 
     function checkAndUpdateWarKills(guildId) {
