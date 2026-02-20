@@ -1447,9 +1447,23 @@
                 }
             }
             
-            // Merge wars
+            // Merge wars — if we have unsaved local changes, merge instead of overwrite
+            // to prevent newly declared wars from being wiped before cloud save
             if (cloud.wars) {
-                gameState.wars = cloud.wars;
+                if (!isDirty) {
+                    gameState.wars = cloud.wars;
+                } else {
+                    // Merge: keep cloud wars as base, add any local-only wars
+                    const cloudWarKeys = new Set(cloud.wars.map(w => w.attacker + '|' + w.defender + '|' + w.startedAt));
+                    const merged = [...cloud.wars];
+                    gameState.wars.forEach(lw => {
+                        const key = lw.attacker + '|' + lw.defender + '|' + lw.startedAt;
+                        if (!cloudWarKeys.has(key)) {
+                            merged.push(lw); // local-only war, preserve it
+                        }
+                    });
+                    gameState.wars = merged;
+                }
             }
             
             // Merge news
@@ -2629,7 +2643,7 @@
         addLog(`<span style="color:#ff4444;">War declared against 【${sanitize(targetGuild.tag)}】!</span>`);
         sendSystemChat(`⚔ WAR! 【${sanitize(guild.tag)}】 has declared war on 【${sanitize(targetGuild.tag)}】! First to 20,000 frontier kills wins!`);
         
-        markDirty();
+        markDirty(true);
     }
 
     function checkAndUpdateWarKills(guildId) {
