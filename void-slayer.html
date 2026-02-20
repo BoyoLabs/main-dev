@@ -1448,23 +1448,38 @@
                 }
             }
             
-            // Merge wars — if we have unsaved local changes, merge instead of overwrite
-            // to prevent newly declared wars from being wiped before cloud save
+            // Merge wars — always use max kill counts to prevent local progress from
+            // being overwritten by stale cloud data between save intervals
             if (cloud.wars) {
-                if (!isDirty) {
-                    gameState.wars = cloud.wars;
-                } else {
-                    // Merge: keep cloud wars as base, add any local-only wars
-                    const cloudWarKeys = new Set(cloud.wars.map(w => w.attacker + '|' + w.defender + '|' + w.startedAt));
-                    const merged = [...cloud.wars];
-                    gameState.wars.forEach(lw => {
-                        const key = lw.attacker + '|' + lw.defender + '|' + lw.startedAt;
-                        if (!cloudWarKeys.has(key)) {
-                            merged.push(lw); // local-only war, preserve it
-                        }
-                    });
-                    gameState.wars = merged;
-                }
+                // Build a lookup of local wars by key for fast matching
+                const localWarMap = new Map();
+                (gameState.wars || []).forEach(lw => {
+                    const key = lw.attacker + '|' + lw.defender + '|' + lw.startedAt;
+                    localWarMap.set(key, lw);
+                });
+                
+                // Start from cloud wars, but take max kills from local
+                const merged = cloud.wars.map(cw => {
+                    const key = cw.attacker + '|' + cw.defender + '|' + cw.startedAt;
+                    const lw = localWarMap.get(key);
+                    if (lw) {
+                        localWarMap.delete(key); // mark as matched
+                        return Object.assign({}, cw, {
+                            attackerKills: Math.max(cw.attackerKills || 0, lw.attackerKills || 0),
+                            defenderKills: Math.max(cw.defenderKills || 0, lw.defenderKills || 0),
+                            // Keep local status if war ended locally (e.g. victory detected)
+                            status: lw.status === 'ended' ? lw.status : cw.status,
+                            endedAt: lw.endedAt || cw.endedAt,
+                            winner: lw.winner || cw.winner
+                        });
+                    }
+                    return cw;
+                });
+                
+                // Add any local-only wars not in cloud (newly declared)
+                localWarMap.forEach(lw => merged.push(lw));
+                
+                gameState.wars = merged;
             }
             
             // Merge news
