@@ -1429,8 +1429,11 @@
                     const localGuild = gameState.guilds[gid];
                     if (!localGuild) {
                         gameState.guilds[gid] = cloudGuild;
+                    } else if (gid === p.guild && isDirty) {
+                        // This is OUR guild and we have unsaved changes (kicks, blurb edits, etc.)
+                        // Always keep local version — it will be pushed to cloud on next save
                     } else {
-                        // Update if cloud has more members
+                        // For other guilds, update if cloud has more members
                         if ((cloudGuild.members || []).length > (localGuild.members || []).length) {
                             gameState.guilds[gid] = cloudGuild;
                         }
@@ -2597,7 +2600,7 @@
         sendSystemChat(`🏰 ${memberDisplay} has been kicked from 【${sanitize(guild.tag)}】${sanitize(guild.name)}.`);
         
         refreshGuildUI();
-        markDirty();
+        markDirty(true);
     }
 
     function leaveGuild() {
