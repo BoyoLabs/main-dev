@@ -261,8 +261,8 @@
         </span>
     </div>
 
-    <div id="desync-banner" class="hidden" style="background:rgba(139,60,0,0.9); border-bottom:1px solid #ff8844; padding:8px 20px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:0.85rem;">
-        <span style="color:#ffcc88;">⚠ <strong>Cloud sync issue</strong> — Your progress is saved locally, but having trouble reaching the server. <span id="desync-fail-count"></span></span>
+    <div id="desync-banner" class="hidden" style="background:rgba(100,20,0,0.97); border-bottom:2px solid #ff4400; padding:8px 20px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:0.85rem;">
+        <span style="color:#ffcc88;">⚠ <strong>OUT OF SYNC</strong> — Cloud sync failed. <strong style="color:#ff6644;">Stop playing to avoid losing progress.</strong> Your data is saved locally. <span id="desync-fail-count"></span></span>
         <span style="display:flex; gap:8px; align-items:center;">
             <span id="desync-status" style="color:#ff8844; font-size:0.8rem;">Retrying...</span>
             <button class="action-btn" onclick="location.reload()" style="padding:6px 14px; font-size:0.8rem; background:#553300; border-color:#ff8844; color:#ffcc88;">↻ Refresh Page</button>
@@ -1159,7 +1159,7 @@
                 const loadResp = await fetchWithTimeout(
                     `${CLOUD_CONFIG.webAppUrl}?realm=${encodeURIComponent(realm)}&action=load`,
                     { redirect: 'follow' },
-                    15000
+                    25000
                 );
                 if (loadResp.ok) {
                     const loadText = await loadResp.text();
@@ -1210,7 +1210,7 @@
                 redirect: 'follow',
                 headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify(payload)
-            }, 20000);
+            }, 30000);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
@@ -1244,13 +1244,13 @@
             // Never disable cloud — always keep retrying
             updateCloudStatus(`Retrying (${cloudFailCount})`, '#ff8844');
             
-            // Show desync banner after 3 consecutive failures
-            if (cloudFailCount >= 3) {
+            // Show desync banner immediately on first failure
+            if (cloudFailCount >= 1) {
                 showDesyncBanner();
             }
             
-            // Schedule a retry with exponential backoff (cap at 30s)
-            const backoff = Math.min(5000 * cloudFailCount, 30000);
+            // Schedule a retry with exponential backoff (cap at 10s — no point waiting 30s on mobile)
+            const backoff = Math.min(3000 * cloudFailCount, 10000);
             setTimeout(() => {
                 if (currentUser) {
                     isDirty = true;
@@ -3787,7 +3787,7 @@
             ]
         },
         {
-            id: 'eclipse_titan', name: 'Eclipse Titan', emoji: '🌑', tier: 5, unlockLevel: 50,
+            id: 'eclipse_titan', name: 'Eclipse Titan', emoji: '', image: 'https://i.imgur.com/vK54uzw.png', tier: 5, unlockLevel: 50,
             desc: 'Born when the void eclipsed the last sun, its power is absolute.',
             rewardType: 'xp', baseHp: 5000, baseDamage: 48, hpPerLevel: 150, dmgPerLevel: 2.5,
             xpReward: 6000, goldReward: 0, regenPerMin: 90,
@@ -3800,7 +3800,7 @@
             ]
         },
         {
-            id: 'crimson_archfiend', name: 'Crimson Archfiend', emoji: '😈', tier: 6, unlockLevel: 60,
+            id: 'crimson_archfiend', name: 'Crimson Archfiend', emoji: '', image: 'https://i.imgur.com/XFJwtSv.png', tier: 6, unlockLevel: 60,
             desc: 'A demon lord wreathed in hellfire, commander of blood legions.',
             rewardType: 'gold', baseHp: 7000, baseDamage: 58, hpPerLevel: 180, dmgPerLevel: 2.8,
             xpReward: 0, goldReward: 10000, regenPerMin: 110,
@@ -4627,7 +4627,9 @@
             'https://i.imgur.com/qU33C36.png',
             'https://i.imgur.com/HhpmUBd.png',
             'https://i.imgur.com/oSwXMcr.png',
-            'https://i.imgur.com/lkyNHJE.png'
+            'https://i.imgur.com/lkyNHJE.png',
+            'https://i.imgur.com/vK54uzw.png',
+            'https://i.imgur.com/XFJwtSv.png'
         ];
         let i = 0;
         function loadNext() {
