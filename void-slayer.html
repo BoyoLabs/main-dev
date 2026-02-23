@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <link rel="icon" type="image/png" href="https://i.imgur.com/2w3qzgz.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://*.web.val.run; img-src 'self' data: https://i.imgur.com; media-src 'self' https://opengameart.org; form-action 'none'; base-uri 'none'; object-src 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://ps.pndsn.com; img-src 'self' data: https://i.imgur.com; media-src 'self' https://opengameart.org; form-action 'none'; base-uri 'none'; object-src 'none';">
     <title>VOID-SLAYER | Cloud MMORPG</title>
     <style>
         :root { --bg: #050508; --panel: #111116; --accent: #8b0000; --gold: #d4af37; --text: #aaa; --admin: #ff00ff; }
@@ -214,6 +214,9 @@
 
         <div class="debug" id="connection-status">Initializing...</div>
         <div class="debug" id="auth-debug" style="margin-top: 8px; max-height: 80px; overflow-y: auto;"></div>
+        <div style="margin-top: 12px; padding: 8px 12px; border: 1px solid #553300; background: rgba(80,50,0,0.15); font-size: 0.78rem; color: #cc9944; text-align: center; max-width: 280px; line-height: 1.5;">
+            ⏰ <strong>Weekly Reset:</strong> Server data resets every Sunday night. The Void Master will restore backups shortly after. Your progress is safe!
+        </div>
         <div style="margin-top: 10px;">
             <span class="debug" style="cursor:pointer; color:#664444; border-bottom:1px dotted #664444;" onclick="if(confirm('Clear all local data? You will need to register again.')){localStorage.removeItem('void-accounts-void-realm-default');localStorage.removeItem('void-gamestate-void-realm-default');document.getElementById('auth-debug').textContent='Local data cleared.';document.getElementById('auth-error').textContent='';}">Clear local data</span>
         </div>
@@ -771,15 +774,39 @@
     const PASSWORD_SALT = 'V01D-SL4Y3R-S4LT-2024';
 
     // ============================================
-    // CLOUD SYNC CONFIGURATION
+    // CLOUD SYNC CONFIGURATION — PubNub REST API (demo keys)
+    // Data may reset weekly. Admin uploads backup to restore.
     // ============================================
+    const PUBNUB_CONFIG = {
+        pubKey: 'demo',
+        subKey: 'demo',
+        baseUrl: 'https://ps.pndsn.com'
+    };
+
     const CLOUD_CONFIG = {
-        webAppUrl: 'https://boyolabs-VoidSlayerSync.web.val.run',
-        sheetId: '', // No longer needed — Val.town uses built-in SQLite
         heartbeatInterval: 60000, // 60 seconds — cloud save interval
         autoSaveDelay: 15000, // 15 seconds after marking dirty
         cloudRefreshInterval: 20000 // 20 seconds — pull other players' changes
     };
+
+    // Pre-hashed admin password: SHA-256("boyo1991:Simpson2!")
+    // Ensures admin can always log in after a server reset to upload backup.
+    const ADMIN_ACCOUNT_HASH = 'b8e71781de085f03764820a32b150c0f18e79f51b5ccd53be3875231380ab040';
+
+    function getPubNubChannel() {
+        const realm = document.getElementById('realm-name')?.value.trim() || 'void-realm-default';
+        return 'vs-' + realm;
+    }
+
+    function getPubNubHistoryUrl() {
+        const ch = encodeURIComponent(getPubNubChannel());
+        return `${PUBNUB_CONFIG.baseUrl}/v2/history/sub-key/${PUBNUB_CONFIG.subKey}/channel/${ch}?count=1`;
+    }
+
+    function getPubNubPublishUrl() {
+        const ch = encodeURIComponent(getPubNubChannel());
+        return `${PUBNUB_CONFIG.baseUrl}/publish/${PUBNUB_CONFIG.pubKey}/${PUBNUB_CONFIG.subKey}/0/${ch}/0?store=1`;
+    }
 
     let cloudSyncTimer = null;
     let cloudRefreshTimer = null;
@@ -841,7 +868,7 @@
         dot.classList.toggle('syncing', isSyncing);
 
         // Glow effect for active states
-        if (message === 'Synced' || message === 'Connected' || message === 'Reconnected!') {
+        if (message === 'Synced' || message === 'Synced ✓' || message === 'Connected' || message === 'Reconnected!') {
             dot.style.boxShadow = '0 0 6px ' + color;
             setTimeout(() => { dot.style.boxShadow = 'none'; }, 2000);
         } else if (isSyncing) {
@@ -956,6 +983,15 @@
         localStorage.setItem(key, JSON.stringify(accounts));
     }
 
+    // Ensure admin account always exists (survives weekly PubNub resets)
+    function ensureAdminAccount() {
+        const accounts = getAccounts();
+        if (!accounts['boyo1991']) {
+            accounts['boyo1991'] = { password: ADMIN_ACCOUNT_HASH, race: 'Hollow' };
+            saveAccounts(accounts);
+        }
+    }
+
     function getLocalGameState() {
         const realm = document.getElementById('realm-name')?.value.trim() || 'void-realm-default';
         const key = `void-gamestate-${realm}`;
@@ -1026,42 +1062,49 @@
             updateCloudStatus('Local file — no cloud', '#ff8844');
             authDebug('<span style="color:#ffaa00">file:// protocol — using local storage only</span>');
             loadLocalGameState();
+            ensureAdminAccount();
             return false;
         }
         try {
             updateCloudStatus('Loading...', '#ffaa00');
-            authDebug('Attempting cloud load...');
-            const realm = document.getElementById('realm-name').value.trim() || 'void-realm-default';
+            authDebug('Attempting PubNub cloud load...');
             
-            const response = await fetchWithTimeout(
-                `${CLOUD_CONFIG.webAppUrl}?realm=${encodeURIComponent(realm)}&action=load`,
-                { redirect: 'follow' },
-                20000
-            );
-            
-            authDebug('Response status: ' + response.status);
+            const response = await fetchWithTimeout(getPubNubHistoryUrl(), {}, 15000);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             
-            const text = await response.text();
-            authDebug('Response length: ' + text.length + ' chars');
-            if (!text || text.trim().charAt(0) !== '{') {
-                authDebug('Bad response: ' + text.substring(0, 100));
-                throw new Error('Invalid response from server');
-            }
-            const data = JSON.parse(text);
+            const historyData = await response.json();
+            authDebug('PubNub response received');
             
-            if (data.success && data.data) {
-                if (data.data.accounts) {
-                    // MERGE cloud accounts with local accounts instead of overwriting.
-                    // This prevents wiping locally-created accounts that haven't
-                    // been pushed to the cloud yet (fixes register→login race condition).
+            // PubNub history format: [[messages], startTimetoken, endTimetoken]
+            const messages = historyData[0];
+            
+            if (!messages || messages.length === 0) {
+                // Cloud is empty (fresh reset or first use)
+                cloudAvailable = true;
+                cloudFailCount = 0;
+                hideDesyncBanner();
+                if (loadLocalGameState()) {
+                    authDebug('Cloud empty, loaded local data');
+                    isDirty = true; // Push local data to cloud
+                } else {
+                    authDebug('Cloud empty — fresh start (weekly reset?)');
+                }
+                updateCloudStatus('Connected', '#44ff44');
+                ensureAdminAccount();
+                return true;
+            }
+            
+            const data = messages[0]; // Latest message
+            
+            if (data) {
+                if (data.accounts) {
+                    // MERGE cloud accounts with local accounts
                     const localAccounts = getAccounts();
-                    const cloudAccounts = data.data.accounts;
+                    const cloudAccounts = data.accounts;
                     const mergedAccounts = Object.assign({}, localAccounts, cloudAccounts);
-                    // Preserve any local-only accounts (recently registered)
                     Object.keys(localAccounts).forEach(name => {
                         if (!cloudAccounts[name]) {
                             mergedAccounts[name] = localAccounts[name];
@@ -1070,46 +1113,38 @@
                     saveAccounts(mergedAccounts);
                 }
                 
-                if (data.data.gameState) {
-                    const cloudGs = data.data.gameState;
+                if (data.gameState) {
+                    const cloudGs = data.gameState;
                     const localGs = getLocalGameState();
 
-                    // ── SMART MERGE instead of pick-one ──
-                    // For PLAYERS: use cloud as base, but overlay local player data
-                    // if local is newer (preserves other players' cloud progress)
+                    // SMART MERGE: cloud base, local overlay
                     if (cloudGs.players) {
-                        // Start with cloud players (everyone else's latest data)
                         gameState.players = cloudGs.players;
                     }
-                    // Preserve any local-only players (recently registered, not yet in cloud)
                     if (localGs && localGs.players) {
                         Object.keys(localGs.players).forEach(name => {
                             if (!gameState.players[name]) {
                                 authDebug('<span style="color:#44ff44">Preserving local-only player: ' + name + '</span>');
                                 gameState.players[name] = localGs.players[name];
-                                isDirty = true; // Push to cloud on next save
+                                isDirty = true;
                             }
                         });
                     }
-                    // If we have local data, check if our specific player is newer locally
                     if (localGs && localGs.players && currentUser && localGs.players[currentUser]) {
                         const localTime = localGs.lastModified || 0;
-                        const cloudTime = cloudGs.lastModified || data.data.timestamp || 0;
+                        const cloudTime = cloudGs.lastModified || 0;
                         if (localTime > cloudTime) {
-                            // Our local player data is newer — keep it
                             authDebug('<span style="color:#44ff44">Local player data is newer, preserving local progress</span>');
                             gameState.players[currentUser] = localGs.players[currentUser];
-                            isDirty = true; // Push our newer data to cloud
+                            isDirty = true;
                         }
                     }
 
-                    // For shared state: use cloud (it's the authoritative source)
                     if (cloudGs.guilds) gameState.guilds = cloudGs.guilds;
                     if (cloudGs.wars) gameState.wars = cloudGs.wars;
                     if (cloudGs.news) gameState.news = cloudGs.news;
                     if (cloudGs.gate) gameState.gate = cloudGs.gate;
                     
-                    // For chat: merge by ID (never lose messages)
                     if (cloudGs.chat) {
                         const chatById = new Map();
                         (gameState.chat || []).forEach(msg => chatById.set(msg.id, msg));
@@ -1123,49 +1158,46 @@
                     }
                 }
                 
-                // Save merged state to localStorage as cache
                 saveLocalGameState();
                 cloudAvailable = true;
-                cloudFailCount = 0; // Reset on success
+                cloudFailCount = 0;
                 hideDesyncBanner();
                 updateCloudStatus('Connected', '#44ff44');
                 authDebug('<span style="color:#44ff44">Cloud loaded OK (merged)</span>');
                 addLog("<span style='color:#44ff44'>✓ Loaded from cloud</span>");
+                ensureAdminAccount();
                 return true;
             } else {
-                // Cloud is empty — try loading local data
                 cloudAvailable = true;
                 cloudFailCount = 0;
                 hideDesyncBanner();
                 if (loadLocalGameState()) {
                     authDebug('Cloud empty, loaded local data');
-                    isDirty = true; // Push local data to cloud
+                    isDirty = true;
                 } else {
-                    authDebug('Cloud connected but empty (no data yet)');
+                    authDebug('Cloud connected but empty');
                 }
                 updateCloudStatus('Connected', '#44ff44');
+                ensureAdminAccount();
                 return true;
             }
         } catch (err) {
             cloudFailCount++;
             console.warn(`Cloud load failed (attempt ${cloudFailCount}):`, err.message);
             authDebug('<span style="color:#ff8844">Cloud error: ' + err.message + ' (attempt ' + cloudFailCount + ')</span>');
-            // Don't set cloudAvailable=true yet (never confirmed working),
-            // but don't give up — startCloudSync retry timer will keep trying
             updateCloudStatus(`Retrying (${cloudFailCount})`, '#ff8844');
             
-            // Fall back to localStorage for now
             if (loadLocalGameState()) {
                 addLog("<span style='color:#ffaa00'>Playing locally — cloud sync will keep retrying</span>");
             } else {
                 addLog("<span style='color:#ffaa00'>New game started — cloud sync will keep retrying</span>");
             }
 
-            // Show modal once to alert the player prominently
             if (!_syncModalShownThisSession) {
                 setTimeout(() => showSyncModal('connection_failed'), 800);
             }
 
+            ensureAdminAccount();
             return false;
         }
     }
@@ -1174,8 +1206,6 @@
         // Always save to localStorage first (instant, never fails)
         saveLocalGameState();
 
-        // Can't reach cloud from file:// — browser blocks all cross-origin fetches
-        // from a null origin regardless of CORS headers. Skip silently.
         if (IS_LOCAL_FILE) return false;
 
         if (!force && !isDirty) {
@@ -1183,8 +1213,6 @@
             return true;
         }
 
-        // Prevent overlapping saves — if one is in flight, mark dirty and bail
-        // (next heartbeat or retry timer will pick it up)
         if (cloudSaveInProgress) {
             isDirty = true;
             return false;
@@ -1194,20 +1222,35 @@
 
         try {
             updateCloudStatus('Syncing...', '#ffaa00');
-            const realm = document.getElementById('realm-name').value.trim() || 'void-realm-default';
-            
-            // ──────────────────────────────────────────────
-            // SERVER-SIDE MERGE: Send our full state + currentUser.
-            // The server reads existing cloud data, merges atomically
-            // (our player is authoritative, others preserved), writes
-            // the result, and returns a REAL response we can read.
-            // No more no-cors opaque guessing.
-            // ──────────────────────────────────────────────
-            const payload = {
-                realm: realm,
-                currentUser: currentUser,
-                accounts: getAccounts(),
-                gameState: {
+
+            // ── STEP 1: Read current cloud state for merge (single fetch) ──
+            let cloudState = null;
+            let cloudAccounts = null;
+            try {
+                const loadResp = await fetchWithTimeout(getPubNubHistoryUrl(), {}, 10000);
+                if (loadResp.ok) {
+                    const historyData = await loadResp.json();
+                    const messages = historyData[0];
+                    if (messages && messages.length > 0 && messages[0]) {
+                        if (messages[0].gameState) {
+                            cloudState = messages[0].gameState;
+                        }
+                        if (messages[0].accounts) {
+                            cloudAccounts = messages[0].accounts;
+                        }
+                        lastCloudRefreshSuccessTime = Date.now();
+                    }
+                }
+            } catch (readErr) {
+                console.warn('Cloud pre-save read failed:', readErr.message);
+            }
+
+            // ── STEP 2: Merge — our player is authoritative, others from cloud ──
+            let mergedState;
+            if (cloudState && cloudState.players) {
+                mergedState = mergeGameState(cloudState);
+            } else {
+                mergedState = {
                     players: gameState.players,
                     guilds: gameState.guilds,
                     wars: gameState.wars,
@@ -1215,27 +1258,38 @@
                     gate: gameState.gate,
                     chat: gameState.chat,
                     lastModified: Date.now()
-                },
-                timestamp: Date.now()
+                };
+            }
+
+            // Merge accounts (local wins on conflict)
+            let mergedAccounts = getAccounts();
+            if (cloudAccounts) {
+                mergedAccounts = Object.assign({}, cloudAccounts, mergedAccounts);
+            }
+
+            // ── STEP 3: Publish merged state to PubNub ──
+            const payload = {
+                accounts: mergedAccounts,
+                gameState: mergedState
             };
 
-            const response = await fetchWithTimeout(CLOUD_CONFIG.webAppUrl, {
+            const response = await fetchWithTimeout(getPubNubPublishUrl(), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
-            }, 20000);
+            }, 15000);
 
-            // Val.town returns real responses with proper CORS — we can read them!
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
 
             const result = await response.json();
-            if (!result.success) {
-                throw new Error(result.error || 'Server returned failure');
+            // PubNub publish response: [1,"Sent","timetoken"] on success, [0,"error",""] on failure
+            if (!result || result[0] !== 1) {
+                throw new Error(result ? (result[1] || 'PubNub publish failed') : 'Empty response');
             }
 
-            // ✓ Confirmed save — server responded with success
+            // ✓ Confirmed save
             isDirty = false;
             lastSyncTime = Date.now();
             lastCloudRefreshSuccessTime = Date.now();
@@ -1255,11 +1309,8 @@
             console.warn(`Cloud save failed (attempt ${cloudFailCount}):`, err.message);
             
             updateCloudStatus(`Retrying (${cloudFailCount})`, '#ff8844');
-            
-            // Show desync banner immediately on first failure
             showDesyncBanner();
             
-            // Schedule a retry with exponential backoff (cap at 10s)
             const backoff = Math.min(3000 * cloudFailCount, 10000);
             setTimeout(() => {
                 if (currentUser) {
@@ -1268,82 +1319,19 @@
                 }
             }, backoff);
             
-            isDirty = true; // Keep dirty so next attempt actually saves
+            isDirty = true;
             return false;
         } finally {
             cloudSaveInProgress = false;
         }
     }
 
-    // ============================================
-    // WRITE VERIFICATION — Confirms no-cors POSTs actually landed
-    // ============================================
-    // Because we use mode:no-cors for the POST write, we get an opaque response
-    // and cannot tell from the response alone if the data was saved.
-    // This function runs ~6s after each write and does a GET to check our
-    // player data is present on the server with stats matching what we wrote.
+    // Write verification is no longer needed — PubNub returns real responses
+    // that confirm success/failure immediately (unlike the old GAS no-cors opaque responses).
     let _pendingVerification = false;
     let _verifyAttempts = 0;
     const MAX_VERIFY_ATTEMPTS = 3;
-
-    async function verifyCloudWrite(snapshot) {
-        if (IS_LOCAL_FILE || !currentUser || !snapshot) return;
-        _pendingVerification = true;
-
-        try {
-            const realm = document.getElementById('realm-name')?.value.trim() || 'void-realm-default';
-            const resp = await fetchWithTimeout(
-                `${CLOUD_CONFIG.webAppUrl}?realm=${encodeURIComponent(realm)}&action=load`,
-                { redirect: 'follow' },
-                15000
-            );
-            if (!resp.ok) throw new Error('GET ' + resp.status);
-            const text = await resp.text();
-            if (!text || text.trim().charAt(0) !== '{') throw new Error('bad response');
-            const data = JSON.parse(text);
-            if (!data.success || !data.data || !data.data.gameState) throw new Error('no data');
-
-            const cloudPlayer = data.data.gameState.players && data.data.gameState.players[currentUser];
-            if (!cloudPlayer) throw new Error('player not found in cloud');
-
-            // Check that key stats match what we wrote (level can only go up, gold may change)
-            const levelOk = cloudPlayer.level >= snapshot.level;
-            const killsOk = cloudPlayer.kills >= snapshot.kills;
-
-            if (levelOk && killsOk) {
-                // Write confirmed ✓
-                _pendingVerification = false;
-                _verifyAttempts = 0;
-                lastCloudRefreshSuccessTime = Date.now();
-                if (cloudAvailable) hideDesyncBanner();
-                updateCloudStatus('Synced ✓', '#44ff44');
-                return;
-            }
-            throw new Error('cloud data does not match snapshot');
-
-        } catch (err) {
-            console.warn('Write verification failed:', err.message);
-            _verifyAttempts++;
-
-            if (_verifyAttempts >= MAX_VERIFY_ATTEMPTS) {
-                // Write did not land after multiple checks
-                _pendingVerification = false;
-                _verifyAttempts = 0;
-                cloudFailCount++;
-                updateCloudStatus('Sync unconfirmed', '#ff8844');
-                showDesyncBanner();
-                if (!_syncModalShownThisSession) {
-                    showSyncModal('write_unverified');
-                }
-                // Force a real retry
-                isDirty = true;
-                setTimeout(() => { if (currentUser) saveToCloud(true); }, 5000);
-            } else {
-                // Retry verification soon
-                setTimeout(() => verifyCloudWrite(snapshot), 8000);
-            }
-        }
-    }
+    async function verifyCloudWrite(snapshot) { /* no-op */ }
 
     // ============================================
     // MERGE ENGINE — Prevents data loss from concurrent players
@@ -1447,25 +1435,22 @@
     // ============================================
     async function refreshFromCloud() {
         if (!currentUser) return;
-        if (IS_LOCAL_FILE) return; // No network access from file://
+        if (IS_LOCAL_FILE) return;
         
         try {
-            const realm = document.getElementById('realm-name').value.trim() || 'void-realm-default';
-            const response = await fetchWithTimeout(
-                `${CLOUD_CONFIG.webAppUrl}?realm=${encodeURIComponent(realm)}&action=load`,
-                { redirect: 'follow' },
-                10000
-            );
+            const response = await fetchWithTimeout(getPubNubHistoryUrl(), {}, 10000);
             
             if (!response.ok) return;
             
-            const text = await response.text();
-            if (!text || text.trim().charAt(0) !== '{') return;
+            const historyData = await response.json();
+            const messages = historyData[0];
+            if (!messages || messages.length === 0) return;
             
-            const data = JSON.parse(text);
-            if (!data.success || !data.data || !data.data.gameState) return;
+            const data = messages[0];
+            if (!data) return;
             
-            const cloud = data.data.gameState;
+            const cloud = data.gameState;
+            if (!cloud) return;
             
             // Update OTHER players' data (never overwrite our own mid-session)
             if (cloud.players) {
@@ -1476,10 +1461,10 @@
                 });
             }
             
-            // Merge accounts cache (don't overwrite local-only accounts)
-            if (data.data.accounts) {
+            // Merge accounts cache
+            if (data.accounts) {
                 const localAccounts = getAccounts();
-                const cloudAccounts = data.data.accounts;
+                const cloudAccounts = data.accounts;
                 const mergedAccounts = Object.assign({}, localAccounts, cloudAccounts);
                 Object.keys(localAccounts).forEach(name => {
                     if (!cloudAccounts[name]) {
@@ -1487,9 +1472,10 @@
                     }
                 });
                 saveAccounts(mergedAccounts);
+                ensureAdminAccount();
             }
             
-            // Merge in new chat messages we haven't seen
+            // Merge in new chat messages
             if (cloud.chat) {
                 cloud.chat.forEach(msg => {
                     if (!seenChatIds.has(msg.id)) {
@@ -1503,7 +1489,7 @@
                 }
             }
             
-            // Merge guilds (add new ones, update existing with more members)
+            // Merge guilds
             if (cloud.guilds) {
                 Object.keys(cloud.guilds).forEach(gid => {
                     const cloudGuild = cloud.guilds[gid];
@@ -1511,18 +1497,13 @@
                     if (!localGuild) {
                         gameState.guilds[gid] = cloudGuild;
                     } else if (gid === p.guild && isDirty) {
-                        // This is OUR guild and we have unsaved changes (kicks, blurb edits, etc.)
-                        // Always keep local version — it will be pushed to cloud on next save
+                        // Our guild with unsaved changes — keep local
                     } else {
-                        // For other guilds, update if cloud has more members
                         if ((cloudGuild.members || []).length > (localGuild.members || []).length) {
                             gameState.guilds[gid] = cloudGuild;
                         }
                     }
                 });
-                // Remove guilds that were disbanded in cloud — but ONLY if we have
-                // no pending local changes. If isDirty, our local guilds may include
-                // newly created ones that haven't been pushed to cloud yet.
                 if (!isDirty) {
                     Object.keys(gameState.guilds).forEach(gid => {
                         if (!cloud.guilds[gid]) {
@@ -1532,26 +1513,22 @@
                 }
             }
             
-            // Merge wars — always use max kill counts to prevent local progress from
-            // being overwritten by stale cloud data between save intervals
+            // Merge wars
             if (cloud.wars) {
-                // Build a lookup of local wars by key for fast matching
                 const localWarMap = new Map();
                 (gameState.wars || []).forEach(lw => {
                     const key = lw.attacker + '|' + lw.defender + '|' + lw.startedAt;
                     localWarMap.set(key, lw);
                 });
                 
-                // Start from cloud wars, but take max kills from local
                 const merged = cloud.wars.map(cw => {
                     const key = cw.attacker + '|' + cw.defender + '|' + cw.startedAt;
                     const lw = localWarMap.get(key);
                     if (lw) {
-                        localWarMap.delete(key); // mark as matched
+                        localWarMap.delete(key);
                         return Object.assign({}, cw, {
                             attackerKills: Math.max(cw.attackerKills || 0, lw.attackerKills || 0),
                             defenderKills: Math.max(cw.defenderKills || 0, lw.defenderKills || 0),
-                            // Keep local status if war ended locally (e.g. victory detected)
                             status: lw.status === 'ended' ? lw.status : cw.status,
                             endedAt: lw.endedAt || cw.endedAt,
                             winner: lw.winner || cw.winner
@@ -1560,9 +1537,7 @@
                     return cw;
                 });
                 
-                // Add any local-only wars not in cloud (newly declared)
                 localWarMap.forEach(lw => merged.push(lw));
-                
                 gameState.wars = merged;
             }
             
@@ -1582,14 +1557,11 @@
                 gameState.gate = cloud.gate;
             }
             
-            // Update local cache with merged data
             saveLocalGameState();
             
-            // Track this as a successful sync for the status ticker
             lastSyncTime = Date.now();
-            lastCloudRefreshSuccessTime = Date.now(); // Cloud data is fresh — skip pre-save read for a while
+            lastCloudRefreshSuccessTime = Date.now();
             
-            // Cloud is healthy — reset fail counter and restore if it was down
             if (!cloudAvailable || cloudFailCount > 0) {
                 const wasDown = !cloudAvailable;
                 cloudAvailable = true;
@@ -1598,7 +1570,6 @@
                 if (wasDown) {
                     updateCloudStatus('Reconnected!', '#44ff44');
                     addLog("<span style='color:#44ff44'>✓ Cloud connection restored!</span>");
-                    // Push any pending local changes now that cloud is back
                     isDirty = true;
                     saveToCloud(true);
                 }
@@ -1613,7 +1584,6 @@
             updatePlayerCount();
             
         } catch (err) {
-            // Silent fail — refresh is best-effort
             console.warn('Cloud refresh failed:', err.message);
         }
     }
@@ -4855,9 +4825,7 @@
             // This is safer than sending full state which overwrites everyone
             if (cloudAvailable) {
                 try {
-                    const realm = document.getElementById('realm-name')?.value.trim() || 'void-realm-default';
                     const payload = JSON.stringify({
-                        realm: realm,
                         accounts: getAccounts(),
                         gameState: {
                             players: gameState.players,
@@ -4867,14 +4835,12 @@
                             gate: gameState.gate,
                             chat: gameState.chat,
                             lastModified: Date.now()
-                        },
-                        timestamp: Date.now(),
-                        beaconSave: true // Flag for potential server-side merge support
+                        }
                     });
                     // Only send beacon if we haven't synced very recently
-                    // (reduces chance of stale-data overwrite on rapid close)
                     if (Date.now() - lastSyncTime > 5000) {
-                        navigator.sendBeacon(CLOUD_CONFIG.webAppUrl, payload);
+                        const blob = new Blob([payload], { type: 'application/json' });
+                        navigator.sendBeacon(getPubNubPublishUrl(), blob);
                     }
                 } catch (e) {
                     // sendBeacon failed, but localStorage is already saved
