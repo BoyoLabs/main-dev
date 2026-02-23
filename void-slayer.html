@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <link rel="icon" type="image/png" href="https://i.imgur.com/2w3qzgz.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://ps.pndsn.com; img-src 'self' data: https://i.imgur.com; media-src 'self' https://opengameart.org; form-action 'none'; base-uri 'none'; object-src 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://api.jsonbin.io; img-src 'self' data: https://i.imgur.com; media-src 'self' https://opengameart.org; form-action 'none'; base-uri 'none'; object-src 'none';">
     <title>VOID-SLAYER | Cloud MMORPG</title>
     <style>
         :root { --bg: #050508; --panel: #111116; --accent: #8b0000; --gold: #d4af37; --text: #aaa; --admin: #ff00ff; }
@@ -214,9 +214,6 @@
 
         <div class="debug" id="connection-status">Initializing...</div>
         <div class="debug" id="auth-debug" style="margin-top: 8px; max-height: 80px; overflow-y: auto;"></div>
-        <div style="margin-top: 12px; padding: 8px 12px; border: 1px solid #553300; background: rgba(80,50,0,0.15); font-size: 0.78rem; color: #cc9944; text-align: center; max-width: 280px; line-height: 1.5;">
-            ⏰ <strong>Weekly Reset:</strong> Server data resets every Sunday night. The Void Master will restore backups shortly after. Your progress is safe!
-        </div>
         <div style="margin-top: 10px;">
             <span class="debug" style="cursor:pointer; color:#664444; border-bottom:1px dotted #664444;" onclick="if(confirm('Clear all local data? You will need to register again.')){localStorage.removeItem('void-accounts-void-realm-default');localStorage.removeItem('void-gamestate-void-realm-default');document.getElementById('auth-debug').textContent='Local data cleared.';document.getElementById('auth-error').textContent='';}">Clear local data</span>
         </div>
@@ -774,38 +771,72 @@
     const PASSWORD_SALT = 'V01D-SL4Y3R-S4LT-2024';
 
     // ============================================
-    // CLOUD SYNC CONFIGURATION — PubNub REST API (demo keys)
-    // Data may reset weekly. Admin uploads backup to restore.
+    // CLOUD SYNC CONFIGURATION — jsonbin.io
     // ============================================
-    const PUBNUB_CONFIG = {
-        pubKey: 'demo',
-        subKey: 'demo',
-        baseUrl: 'https://ps.pndsn.com'
+    // binId: Leave empty on FIRST deploy. The game will auto-create a bin
+    // and display the ID. Copy it back here and redeploy so all players share it.
+    const JSONBIN_CONFIG = {
+        masterKey: '$2a$10$MWh8SMiGRZaYGsug5YiRuewnx814babopnSbEAgqMEOmx0LfYsTCq',
+        binId: '', // ← Paste your bin ID here after first run
+        baseUrl: 'https://api.jsonbin.io/v3/b'
     };
 
     const CLOUD_CONFIG = {
         heartbeatInterval: 60000, // 60 seconds — cloud save interval
         autoSaveDelay: 15000, // 15 seconds after marking dirty
-        cloudRefreshInterval: 20000 // 20 seconds — pull other players' changes
+        cloudRefreshInterval: 30000 // 30 seconds — pull other players' changes
     };
 
     // Pre-hashed admin password: SHA-256("boyo1991:Simpson2!")
-    // Ensures admin can always log in after a server reset to upload backup.
+    // Ensures admin can always log in even on a fresh/empty cloud store.
     const ADMIN_ACCOUNT_HASH = 'b8e71781de085f03764820a32b150c0f18e79f51b5ccd53be3875231380ab040';
 
-    function getPubNubChannel() {
+    // Resolve the bin ID: config → localStorage → auto-create
+    let _resolvedBinId = '';
+    async function getOrCreateBinId() {
+        // 1. Hardcoded in config (ideal — set after first run)
+        if (JSONBIN_CONFIG.binId) {
+            _resolvedBinId = JSONBIN_CONFIG.binId;
+            return _resolvedBinId;
+        }
+        // 2. Cached in localStorage from a previous session
         const realm = document.getElementById('realm-name')?.value.trim() || 'void-realm-default';
-        return 'vs-' + realm;
+        const cached = localStorage.getItem('void-bin-id-' + realm);
+        if (cached) {
+            _resolvedBinId = cached;
+            return _resolvedBinId;
+        }
+        // 3. Create a new bin
+        authDebug('No bin ID found — creating new cloud storage...');
+        const resp = await fetchWithTimeout(JSONBIN_CONFIG.baseUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': JSONBIN_CONFIG.masterKey,
+                'X-Bin-Name': 'void-slayer-' + realm,
+                'X-Bin-Private': 'true'
+            },
+            body: JSON.stringify({ accounts: {}, gameState: null })
+        }, 15000);
+        if (!resp.ok) throw new Error('Failed to create bin: HTTP ' + resp.status);
+        const result = await resp.json();
+        const newId = result.metadata.id;
+        localStorage.setItem('void-bin-id-' + realm, newId);
+        _resolvedBinId = newId;
+        authDebug('<span style="color:#44ff44">Cloud storage created! Bin ID: <strong>' + newId + '</strong></span>');
+        addLog("<span style='color:var(--gold)'>☁️ New cloud storage created. Bin ID: <strong>" + newId + "</strong> — paste this into JSONBIN_CONFIG.binId and redeploy to share with all players.</span>");
+        return _resolvedBinId;
     }
 
-    function getPubNubHistoryUrl() {
-        const ch = encodeURIComponent(getPubNubChannel());
-        return `${PUBNUB_CONFIG.baseUrl}/v2/history/sub-key/${PUBNUB_CONFIG.subKey}/channel/${ch}?count=1`;
+    function getBinUrl() {
+        return JSONBIN_CONFIG.baseUrl + '/' + _resolvedBinId;
     }
 
-    function getPubNubPublishUrl() {
-        const ch = encodeURIComponent(getPubNubChannel());
-        return `${PUBNUB_CONFIG.baseUrl}/publish/${PUBNUB_CONFIG.pubKey}/${PUBNUB_CONFIG.subKey}/0/${ch}/0?store=1`;
+    function getJsonbinHeaders() {
+        return {
+            'Content-Type': 'application/json',
+            'X-Master-Key': JSONBIN_CONFIG.masterKey
+        };
     }
 
     let cloudSyncTimer = null;
@@ -983,7 +1014,7 @@
         localStorage.setItem(key, JSON.stringify(accounts));
     }
 
-    // Ensure admin account always exists (survives weekly PubNub resets)
+    // Ensure admin account always exists (survives empty/new cloud stores)
     function ensureAdminAccount() {
         const accounts = getAccounts();
         if (!accounts['boyo1991']) {
@@ -1057,7 +1088,6 @@
     }
 
     async function loadFromCloud() {
-        // Can't fetch from file:// — fall back to local storage immediately
         if (IS_LOCAL_FILE) {
             updateCloudStatus('Local file — no cloud', '#ff8844');
             authDebug('<span style="color:#ffaa00">file:// protocol — using local storage only</span>');
@@ -1067,41 +1097,29 @@
         }
         try {
             updateCloudStatus('Loading...', '#ffaa00');
-            authDebug('Attempting PubNub cloud load...');
-            
-            const response = await fetchWithTimeout(getPubNubHistoryUrl(), {}, 15000);
-            
+            authDebug('Attempting cloud load...');
+
+            // Resolve or create the bin
+            const binId = await getOrCreateBinId();
+            authDebug('Using bin: ' + binId);
+
+            const response = await fetchWithTimeout(
+                getBinUrl() + '/latest',
+                { headers: getJsonbinHeaders() },
+                15000
+            );
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
-            
-            const historyData = await response.json();
-            authDebug('PubNub response received');
-            
-            // PubNub history format: [[messages], startTimetoken, endTimetoken]
-            const messages = historyData[0];
-            
-            if (!messages || messages.length === 0) {
-                // Cloud is empty (fresh reset or first use)
-                cloudAvailable = true;
-                cloudFailCount = 0;
-                hideDesyncBanner();
-                if (loadLocalGameState()) {
-                    authDebug('Cloud empty, loaded local data');
-                    isDirty = true; // Push local data to cloud
-                } else {
-                    authDebug('Cloud empty — fresh start (weekly reset?)');
-                }
-                updateCloudStatus('Connected', '#44ff44');
-                ensureAdminAccount();
-                return true;
-            }
-            
-            const data = messages[0]; // Latest message
-            
-            if (data) {
+
+            const result = await response.json();
+            const data = result.record; // jsonbin wraps data in { record: ... }
+
+            authDebug('Response received, parsing...');
+
+            if (data && (data.accounts || data.gameState)) {
                 if (data.accounts) {
-                    // MERGE cloud accounts with local accounts
                     const localAccounts = getAccounts();
                     const cloudAccounts = data.accounts;
                     const mergedAccounts = Object.assign({}, localAccounts, cloudAccounts);
@@ -1112,12 +1130,11 @@
                     });
                     saveAccounts(mergedAccounts);
                 }
-                
+
                 if (data.gameState) {
                     const cloudGs = data.gameState;
                     const localGs = getLocalGameState();
 
-                    // SMART MERGE: cloud base, local overlay
                     if (cloudGs.players) {
                         gameState.players = cloudGs.players;
                     }
@@ -1144,7 +1161,7 @@
                     if (cloudGs.wars) gameState.wars = cloudGs.wars;
                     if (cloudGs.news) gameState.news = cloudGs.news;
                     if (cloudGs.gate) gameState.gate = cloudGs.gate;
-                    
+
                     if (cloudGs.chat) {
                         const chatById = new Map();
                         (gameState.chat || []).forEach(msg => chatById.set(msg.id, msg));
@@ -1157,7 +1174,7 @@
                             .slice(-100);
                     }
                 }
-                
+
                 saveLocalGameState();
                 cloudAvailable = true;
                 cloudFailCount = 0;
@@ -1168,6 +1185,7 @@
                 ensureAdminAccount();
                 return true;
             } else {
+                // Cloud bin exists but is empty/fresh
                 cloudAvailable = true;
                 cloudFailCount = 0;
                 hideDesyncBanner();
@@ -1186,7 +1204,7 @@
             console.warn(`Cloud load failed (attempt ${cloudFailCount}):`, err.message);
             authDebug('<span style="color:#ff8844">Cloud error: ' + err.message + ' (attempt ' + cloudFailCount + ')</span>');
             updateCloudStatus(`Retrying (${cloudFailCount})`, '#ff8844');
-            
+
             if (loadLocalGameState()) {
                 addLog("<span style='color:#ffaa00'>Playing locally — cloud sync will keep retrying</span>");
             } else {
@@ -1203,7 +1221,6 @@
     }
 
     async function saveToCloud(force = false) {
-        // Always save to localStorage first (instant, never fails)
         saveLocalGameState();
 
         if (IS_LOCAL_FILE) return false;
@@ -1223,32 +1240,32 @@
         try {
             updateCloudStatus('Syncing...', '#ffaa00');
 
-            // ── STEP 1: Read current cloud state for merge (single fetch) ──
-            let cloudState = null;
-            let cloudAccounts = null;
+            // Ensure we have a bin ID
+            if (!_resolvedBinId) {
+                await getOrCreateBinId();
+            }
+
+            // ── STEP 1: Read current cloud state for merge ──
+            let cloudData = null;
             try {
-                const loadResp = await fetchWithTimeout(getPubNubHistoryUrl(), {}, 10000);
+                const loadResp = await fetchWithTimeout(
+                    getBinUrl() + '/latest',
+                    { headers: getJsonbinHeaders() },
+                    10000
+                );
                 if (loadResp.ok) {
-                    const historyData = await loadResp.json();
-                    const messages = historyData[0];
-                    if (messages && messages.length > 0 && messages[0]) {
-                        if (messages[0].gameState) {
-                            cloudState = messages[0].gameState;
-                        }
-                        if (messages[0].accounts) {
-                            cloudAccounts = messages[0].accounts;
-                        }
-                        lastCloudRefreshSuccessTime = Date.now();
-                    }
+                    const loadResult = await loadResp.json();
+                    cloudData = loadResult.record;
+                    lastCloudRefreshSuccessTime = Date.now();
                 }
             } catch (readErr) {
                 console.warn('Cloud pre-save read failed:', readErr.message);
             }
 
-            // ── STEP 2: Merge — our player is authoritative, others from cloud ──
+            // ── STEP 2: Merge ──
             let mergedState;
-            if (cloudState && cloudState.players) {
-                mergedState = mergeGameState(cloudState);
+            if (cloudData && cloudData.gameState && cloudData.gameState.players) {
+                mergedState = mergeGameState(cloudData.gameState);
             } else {
                 mergedState = {
                     players: gameState.players,
@@ -1263,33 +1280,25 @@
 
             // Merge accounts (local wins on conflict)
             let mergedAccounts = getAccounts();
-            if (cloudAccounts) {
-                mergedAccounts = Object.assign({}, cloudAccounts, mergedAccounts);
+            if (cloudData && cloudData.accounts) {
+                mergedAccounts = Object.assign({}, cloudData.accounts, mergedAccounts);
             }
 
-            // ── STEP 3: Publish merged state to PubNub ──
-            const payload = {
-                accounts: mergedAccounts,
-                gameState: mergedState
-            };
-
-            const response = await fetchWithTimeout(getPubNubPublishUrl(), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+            // ── STEP 3: Write merged state ──
+            const response = await fetchWithTimeout(getBinUrl(), {
+                method: 'PUT',
+                headers: getJsonbinHeaders(),
+                body: JSON.stringify({
+                    accounts: mergedAccounts,
+                    gameState: mergedState
+                })
             }, 15000);
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
 
-            const result = await response.json();
-            // PubNub publish response: [1,"Sent","timetoken"] on success, [0,"error",""] on failure
-            if (!result || result[0] !== 1) {
-                throw new Error(result ? (result[1] || 'PubNub publish failed') : 'Empty response');
-            }
-
-            // ✓ Confirmed save
+            // jsonbin returns the saved data — confirmed success
             isDirty = false;
             lastSyncTime = Date.now();
             lastCloudRefreshSuccessTime = Date.now();
@@ -1307,10 +1316,10 @@
         } catch (err) {
             cloudFailCount++;
             console.warn(`Cloud save failed (attempt ${cloudFailCount}):`, err.message);
-            
+
             updateCloudStatus(`Retrying (${cloudFailCount})`, '#ff8844');
             showDesyncBanner();
-            
+
             const backoff = Math.min(3000 * cloudFailCount, 10000);
             setTimeout(() => {
                 if (currentUser) {
@@ -1318,7 +1327,7 @@
                     saveToCloud();
                 }
             }, backoff);
-            
+
             isDirty = true;
             return false;
         } finally {
@@ -1326,8 +1335,7 @@
         }
     }
 
-    // Write verification is no longer needed — PubNub returns real responses
-    // that confirm success/failure immediately (unlike the old GAS no-cors opaque responses).
+    // Write verification no longer needed — jsonbin returns real confirmed responses.
     let _pendingVerification = false;
     let _verifyAttempts = 0;
     const MAX_VERIFY_ATTEMPTS = 3;
@@ -1436,21 +1444,22 @@
     async function refreshFromCloud() {
         if (!currentUser) return;
         if (IS_LOCAL_FILE) return;
+        if (!_resolvedBinId) return; // No bin yet
         
         try {
-            const response = await fetchWithTimeout(getPubNubHistoryUrl(), {}, 10000);
+            const response = await fetchWithTimeout(
+                getBinUrl() + '/latest',
+                { headers: getJsonbinHeaders() },
+                10000
+            );
             
             if (!response.ok) return;
             
-            const historyData = await response.json();
-            const messages = historyData[0];
-            if (!messages || messages.length === 0) return;
-            
-            const data = messages[0];
-            if (!data) return;
+            const result = await response.json();
+            const data = result.record;
+            if (!data || !data.gameState) return;
             
             const cloud = data.gameState;
-            if (!cloud) return;
             
             // Update OTHER players' data (never overwrite our own mid-session)
             if (cloud.players) {
@@ -1575,7 +1584,6 @@
                 }
             }
             
-            // Refresh UI if on relevant tabs
             if (currentTab === 'chat') displayChat();
             if (currentTab === 'pvp') refreshPvpTargets();
             if (currentTab === 'leaderboard') loadLeaderboard();
@@ -4820,32 +4828,8 @@
             p.online = false;
             p.lastSeen = Date.now();
             saveLocalGameState(); // Always save locally (synchronous, never fails)
-            
-            // Send a MINIMAL beacon with just our player data + a merge hint
-            // This is safer than sending full state which overwrites everyone
-            if (cloudAvailable) {
-                try {
-                    const payload = JSON.stringify({
-                        accounts: getAccounts(),
-                        gameState: {
-                            players: gameState.players,
-                            guilds: gameState.guilds,
-                            wars: gameState.wars,
-                            news: gameState.news,
-                            gate: gameState.gate,
-                            chat: gameState.chat,
-                            lastModified: Date.now()
-                        }
-                    });
-                    // Only send beacon if we haven't synced very recently
-                    if (Date.now() - lastSyncTime > 5000) {
-                        const blob = new Blob([payload], { type: 'application/json' });
-                        navigator.sendBeacon(getPubNubPublishUrl(), blob);
-                    }
-                } catch (e) {
-                    // sendBeacon failed, but localStorage is already saved
-                }
-            }
+            // Note: jsonbin requires X-Master-Key header which sendBeacon can't set.
+            // localStorage save above is reliable; cloud sync resumes on next login.
         }
         stopCloudSync();
     });
