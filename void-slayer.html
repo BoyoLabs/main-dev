@@ -776,7 +776,7 @@
     // binId: Leave empty on FIRST deploy. The game will auto-create a bin
     // and display the ID. Copy it back here and redeploy so all players share it.
     const JSONBIN_CONFIG = {
-        masterKey: '$2a$10$MWh8SMiGRZaYGsug5YiRuewnx814babopnSbEAgqMEOmx0LfYsTCq',
+        masterKey: '$2a$10$w5h0f3CBu47QwemZjSewROIMd9rrktzJAdHVjBCzAoyoSj2W3EcO.',
         binId: '699c9f3f43b1c97be9973a75',
         baseUrl: 'https://api.jsonbin.io/v3/b'
     };
@@ -812,7 +812,7 @@
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Master-Key': JSONBIN_CONFIG.masterKey,
+                'X-Access-Key': JSONBIN_CONFIG.masterKey,
                 'X-Bin-Name': 'void-slayer-' + realm,
                 'X-Bin-Private': 'true'
             },
@@ -835,7 +835,7 @@
     function getJsonbinHeaders() {
         return {
             'Content-Type': 'application/json',
-            'X-Master-Key': JSONBIN_CONFIG.masterKey
+            'X-Access-Key': JSONBIN_CONFIG.masterKey
         };
     }
 
