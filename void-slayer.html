@@ -1204,7 +1204,13 @@
             // This halves mobile network calls for any active session.
             // ──────────────────────────────────────────────
             const cloudDataAge = Date.now() - lastCloudRefreshSuccessTime;
-            const haveFresnData = cloudDataAge < 90000; // Within 90 seconds = fresh enough
+            // Only skip the pre-read if a cloud refresh literally just completed (<5s ago).
+            // The old 90s window was causing overwrites: both players' saves used stale
+            // in-memory snapshots of each other, causing last-write-wins data loss.
+            // With a 5s threshold, we almost always fetch the latest cloud state before
+            // writing, reducing the race window from ~20s (refresh interval) to ~1s
+            // (network round-trip latency). This fixes desync between concurrent players.
+            const haveFresnData = cloudDataAge < 5000; // Only skip pre-read if refresh just ran
 
             let mergedState;
 
@@ -4063,7 +4069,7 @@
             ]
         },
         {
-            id: 'phantom_overlord', name: 'Phantom Overlord', emoji: '👻', tier: 7, unlockLevel: 70,
+            id: 'phantom_overlord', name: 'Phantom Overlord', emoji: '', image: 'https://i.imgur.com/qEpmYr3.png', tier: 7, unlockLevel: 70,
             desc: 'The undying specter that rules over all wraiths in the void.',
             rewardType: 'xp', baseHp: 9500, baseDamage: 70, hpPerLevel: 200, dmgPerLevel: 3.0,
             xpReward: 12000, goldReward: 0, regenPerMin: 130,
@@ -4076,7 +4082,7 @@
             ]
         },
         {
-            id: 'doom_harbinger', name: 'Doom Harbinger', emoji: '💀', tier: 8, unlockLevel: 80,
+            id: 'doom_harbinger', name: 'Doom Harbinger', emoji: '', image: 'https://i.imgur.com/jt1I4LO.png', tier: 8, unlockLevel: 80,
             desc: 'The herald of annihilation, whose very presence withers worlds.',
             rewardType: 'gold', baseHp: 12500, baseDamage: 82, hpPerLevel: 230, dmgPerLevel: 3.2,
             xpReward: 0, goldReward: 20000, regenPerMin: 150,
