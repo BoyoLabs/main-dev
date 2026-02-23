@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <link rel="icon" type="image/png" href="https://i.imgur.com/2w3qzgz.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com https://script.googleusercontent.com; img-src 'self' data: https://i.imgur.com; media-src 'self' https://opengameart.org; form-action 'none'; base-uri 'none'; object-src 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://*.web.val.run; img-src 'self' data: https://i.imgur.com; media-src 'self' https://opengameart.org; form-action 'none'; base-uri 'none'; object-src 'none';">
     <title>VOID-SLAYER | Cloud MMORPG</title>
     <style>
         :root { --bg: #050508; --panel: #111116; --accent: #8b0000; --gold: #d4af37; --text: #aaa; --admin: #ff00ff; }
@@ -774,10 +774,10 @@
     // CLOUD SYNC CONFIGURATION
     // ============================================
     const CLOUD_CONFIG = {
-        webAppUrl: 'https://script.google.com/macros/s/AKfycbycIokb442lhlrW_pspjiWDrT_jF_dHrDjVZ_oo1vedJawAMvMewC50OULobPYDkMRf/exec',
-        sheetId: '1EblrSWCeDCgOVLB3wJ9rkQ56-SdThchkcpaa3bR4Bas',
+        webAppUrl: 'https://boyolabs-VoidSlayerSync.web.val.run',
+        sheetId: '', // No longer needed — Val.town uses built-in SQLite
         heartbeatInterval: 60000, // 60 seconds — cloud save interval
-        autoSaveDelay: 15000, // 15 seconds after marking dirty (was 3s — too fast for Sheets)
+        autoSaveDelay: 15000, // 15 seconds after marking dirty
         cloudRefreshInterval: 20000 // 20 seconds — pull other players' changes
     };
 
@@ -1197,16 +1197,15 @@
             const realm = document.getElementById('realm-name').value.trim() || 'void-realm-default';
             
             // ──────────────────────────────────────────────
-            // SERVER-SIDE MERGE: The client sends its full local state plus
-            // currentUser. The server acquires a lock, reads existing cloud
-            // data, merges atomically (our player is authoritative, other
-            // players' cloud data is preserved), and writes the result.
-            // This eliminates the client-side read→merge→write race condition
-            // that caused data loss between concurrent players.
+            // SERVER-SIDE MERGE: Send our full state + currentUser.
+            // The server reads existing cloud data, merges atomically
+            // (our player is authoritative, others preserved), writes
+            // the result, and returns a REAL response we can read.
+            // No more no-cors opaque guessing.
             // ──────────────────────────────────────────────
             const payload = {
                 realm: realm,
-                currentUser: currentUser, // Server uses this to know whose data is authoritative
+                currentUser: currentUser,
                 accounts: getAccounts(),
                 gameState: {
                     players: gameState.players,
@@ -1220,43 +1219,35 @@
                 timestamp: Date.now()
             };
 
-            // Capture stats snapshot BEFORE sending — used by verifyCloudWrite
-            const writeSnapshot = p ? { level: p.level, xp: p.xp, gold: p.gold, kills: p.kills || 0 } : null;
-
-            // ──────────────────────────────────────────────
-            // Google Apps Script always issues a redirect on POST requests.
-            // The redirected response is served without CORS headers, causing
-            // browsers to block reading it (ERR_FAILED 200 OK in the console).
-            //
-            // Fix: use mode:'no-cors'. The browser sends the request normally,
-            // GAS receives and processes it, but we receive an opaque response
-            // we can't read. We treat reaching this point without a network
-            // error as a provisional success — the next refreshFromCloud (GET,
-            // which works fine) will confirm the data is there.
-            // ──────────────────────────────────────────────
-            await fetch(CLOUD_CONFIG.webAppUrl, {
+            const response = await fetchWithTimeout(CLOUD_CONFIG.webAppUrl, {
                 method: 'POST',
-                mode: 'no-cors',   // Bypasses CORS for write — GAS still receives the data
-                headers: { 'Content-Type': 'text/plain' },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
-            });
+            }, 20000);
 
-            // Provisional success — data was sent. Verify it landed via a GET in ~6s.
+            // Val.town returns real responses with proper CORS — we can read them!
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || 'Server returned failure');
+            }
+
+            // ✓ Confirmed save — server responded with success
             isDirty = false;
             lastSyncTime = Date.now();
+            lastCloudRefreshSuccessTime = Date.now();
             const wasDown = cloudFailCount > 0;
             cloudFailCount = 0;
             cloudAvailable = true;
             hideDesyncBanner();
-            updateCloudStatus('Syncing...', '#ffaa00');
+            updateCloudStatus('Synced ✓', '#44ff44');
 
             if (wasDown) {
                 addLog("<span style='color:#44ff44'>✓ Cloud connection restored!</span>");
             }
-
-            // Schedule write verification — confirms data landed on server
-            _verifyAttempts = 0;
-            setTimeout(() => verifyCloudWrite(writeSnapshot), 6000);
 
             return true;
         } catch (err) {
