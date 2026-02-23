@@ -774,7 +774,7 @@
     // CLOUD SYNC CONFIGURATION
     // ============================================
     const CLOUD_CONFIG = {
-        webAppUrl: 'https://script.google.com/macros/s/AKfycbyJEZzZiIf3QyawNA-mR_lUHknsWok_2-FLp68odIYxKSiDMGT_F0JcZwJqnGDEMYI/exec',
+        webAppUrl: 'https://script.google.com/macros/s/AKfycbycIokb442lhlrW_pspjiWDrT_jF_dHrDjVZ_oo1vedJawAMvMewC50OULobPYDkMRf/exec',
         sheetId: '1EblrSWCeDCgOVLB3wJ9rkQ56-SdThchkcpaa3bR4Bas',
         heartbeatInterval: 60000, // 60 seconds — cloud save interval
         autoSaveDelay: 15000, // 15 seconds after marking dirty (was 3s — too fast for Sheets)
@@ -1197,27 +1197,18 @@
             const realm = document.getElementById('realm-name').value.trim() || 'void-realm-default';
             
             // ──────────────────────────────────────────────
-            // STEP 1: Get a merge base — but only fetch from cloud if our
-            // in-memory data is stale. refreshFromCloud() runs every 20s and
-            // keeps everyone's data up to date in memory, so if it ran recently
-            // we can skip the extra network read and use what we have.
-            // This halves mobile network calls for any active session.
+            // SERVER-SIDE MERGE: The client sends its full local state plus
+            // currentUser. The server acquires a lock, reads existing cloud
+            // data, merges atomically (our player is authoritative, other
+            // players' cloud data is preserved), and writes the result.
+            // This eliminates the client-side read→merge→write race condition
+            // that caused data loss between concurrent players.
             // ──────────────────────────────────────────────
-            const cloudDataAge = Date.now() - lastCloudRefreshSuccessTime;
-            // Only skip the pre-read if a cloud refresh literally just completed (<5s ago).
-            // The old 90s window was causing overwrites: both players' saves used stale
-            // in-memory snapshots of each other, causing last-write-wins data loss.
-            // With a 5s threshold, we almost always fetch the latest cloud state before
-            // writing, reducing the race window from ~20s (refresh interval) to ~1s
-            // (network round-trip latency). This fixes desync between concurrent players.
-            const haveFresnData = cloudDataAge < 5000; // Only skip pre-read if refresh just ran
-
-            let mergedState;
-
-            if (haveFresnData) {
-                // In-memory gameState is already up-to-date — build merged state directly.
-                // Our player data is authoritative; everything else was refreshed from cloud.
-                mergedState = {
+            const payload = {
+                realm: realm,
+                currentUser: currentUser, // Server uses this to know whose data is authoritative
+                accounts: getAccounts(),
+                gameState: {
                     players: gameState.players,
                     guilds: gameState.guilds,
                     wars: gameState.wars,
@@ -1225,51 +1216,14 @@
                     gate: gameState.gate,
                     chat: gameState.chat,
                     lastModified: Date.now()
-                };
-            } else {
-                // Cloud data is stale — fetch fresh state before writing to avoid
-                // overwriting other players' progress (happens on first save of a session).
-                let cloudState = null;
-                try {
-                    const loadResp = await fetchWithTimeout(
-                        `${CLOUD_CONFIG.webAppUrl}?realm=${encodeURIComponent(realm)}&action=load`,
-                        { redirect: 'follow' },
-                        20000
-                    );
-                    if (loadResp.ok) {
-                        const loadText = await loadResp.text();
-                        if (loadText && loadText.trim().charAt(0) === '{') {
-                            const loadData = JSON.parse(loadText);
-                            if (loadData.success && loadData.data && loadData.data.gameState) {
-                                cloudState = loadData.data.gameState;
-                                lastCloudRefreshSuccessTime = Date.now(); // Got fresh data
-                            }
-                        }
-                    }
-                } catch (readErr) {
-                    console.warn('Cloud pre-save read failed:', readErr.message);
-                    // Continue with full local state as fallback
-                }
+                },
+                timestamp: Date.now()
+            };
 
-                if (cloudState && cloudState.players) {
-                    mergedState = mergeGameState(cloudState);
-                } else {
-                    // No cloud state — send our full local state
-                    mergedState = {
-                        players: gameState.players,
-                        guilds: gameState.guilds,
-                        wars: gameState.wars,
-                        news: gameState.news,
-                        gate: gameState.gate,
-                        chat: gameState.chat,
-                        lastModified: Date.now()
-                    };
-                }
-            }
+            // Capture stats snapshot BEFORE sending — used by verifyCloudWrite
+            const writeSnapshot = p ? { level: p.level, xp: p.xp, gold: p.gold, kills: p.kills || 0 } : null;
 
             // ──────────────────────────────────────────────
-            // STEP 2: Write merged state to cloud
-            //
             // Google Apps Script always issues a redirect on POST requests.
             // The redirected response is served without CORS headers, causing
             // browsers to block reading it (ERR_FAILED 200 OK in the console).
@@ -1280,16 +1234,6 @@
             // error as a provisional success — the next refreshFromCloud (GET,
             // which works fine) will confirm the data is there.
             // ──────────────────────────────────────────────
-            const payload = {
-                realm: realm,
-                accounts: getAccounts(),
-                gameState: mergedState,
-                timestamp: Date.now()
-            };
-
-            // Capture stats snapshot BEFORE sending — used by verifyCloudWrite
-            const writeSnapshot = p ? { level: p.level, xp: p.xp, gold: p.gold, kills: p.kills || 0 } : null;
-
             await fetch(CLOUD_CONFIG.webAppUrl, {
                 method: 'POST',
                 mode: 'no-cors',   // Bypasses CORS for write — GAS still receives the data
