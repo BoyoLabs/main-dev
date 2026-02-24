@@ -13,6 +13,11 @@
         nav { width: 220px; min-width: 220px; background: var(--panel); border-right: 1px solid #222; display: flex; flex-direction: column; padding: 20px; overflow-y: auto; }
         .nav-link { color: #666; padding: 12px 10px; border-bottom: 1px solid #1a1a1a; cursor: pointer; transition: 0.2s; font-size: 0.95rem; }
         .nav-link:hover { color: #fff; background: #1a1a1f; padding-left: 15px; }
+        @keyframes questTabGlow {
+            0%, 100% { color: #d4af37; text-shadow: 0 0 6px #d4af37, 0 0 14px #d4af37; }
+            50% { color: #ffe680; text-shadow: 0 0 12px #ffe680, 0 0 28px #d4af37, 0 0 40px #aa8800; }
+        }
+        .nav-link.quest-glow { animation: questTabGlow 1.4s ease-in-out infinite; font-weight: bold; }
         main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
         #stats-bar { background: #000; padding: 10px 20px; border-bottom: 1px solid #222; display: flex; gap: 20px; font-family: monospace; font-size: 0.85rem; align-items: center; flex-wrap: wrap; }
         .stat-val { color: var(--gold); font-weight: bold; }
@@ -237,7 +242,7 @@
     <h2 style="color:var(--accent)">VOID SLAYER</h2>
     <div class="nav-link" onclick="goTab('grind')">The Frontier</div>
     <div class="nav-link" onclick="goTab('bosses'); refreshBossUI();">Bosses</div>
-    <div class="nav-link" onclick="goTab('quests'); refreshQuestsUI();">Daily Quests</div>
+    <div id="nav-quests" class="nav-link" onclick="goTab('quests'); refreshQuestsUI();">Daily Quests</div>
     <div class="nav-link" onclick="goTab('pvp'); refreshPvpTargets();">The Arena</div>
     <div class="nav-link" onclick="goTab('guild'); refreshGuildUI();">Guild Hall</div>
     <div class="nav-link" onclick="goTab('wars'); refreshWarsUI();">Guild Wars</div>
@@ -479,13 +484,6 @@
                     <div id="admin-action-status" style="margin-top:10px; font-size:0.85rem; color:#888;"></div>
                 </div>
                 
-                <div style="margin-top:30px; border-top:1px solid #222; padding-top:20px;">
-                    <h3 style="color:var(--admin); margin-bottom:10px;">☁️ JSONbin API Usage</h3>
-                    <div id="admin-ratelimit" style="padding:12px; background:#0a0a0a; border:1px solid #222; font-family:monospace; font-size:0.85rem;">
-                        <span style="color:#666;">Waiting for first API call...</span>
-                    </div>
-                </div>
-
                 <div style="margin-top:30px; border-top:1px solid #222; padding-top:20px;">
                     <h3 style="color:var(--admin); margin-bottom:10px;">Backup</h3>
                     <div style="display:flex; flex-wrap:wrap; gap:8px;">
@@ -855,35 +853,6 @@
     let cloudSaveInProgress = false; // Prevent overlapping save requests
     let localChatIds = new Set(); // Track chat messages WE created this session
 
-    // JSONbin rate limit tracking (updated from response headers on every API call)
-    let jsonbinRateLimit = {
-        limit: null,       // Total requests allowed in the window
-        remaining: null,   // Requests remaining
-        reset: null,       // Epoch ms when the window resets
-        lastUpdated: null  // Date of last update
-    };
-
-    function captureRateLimitHeaders(response) {
-        const limit = response.headers.get('X-RateLimit-Limit');
-        const remaining = response.headers.get('X-RateLimit-Remaining');
-        const reset = response.headers.get('X-RateLimit-Reset');
-        if (limit !== null || remaining !== null) {
-            jsonbinRateLimit.limit = limit !== null ? parseInt(limit, 10) : jsonbinRateLimit.limit;
-            jsonbinRateLimit.remaining = remaining !== null ? parseInt(remaining, 10) : jsonbinRateLimit.remaining;
-            jsonbinRateLimit.reset = reset !== null ? parseInt(reset, 10) * 1000 : jsonbinRateLimit.reset; // convert to ms
-            jsonbinRateLimit.lastUpdated = Date.now();
-            // Warn in console if getting low
-            if (jsonbinRateLimit.remaining !== null && jsonbinRateLimit.limit !== null) {
-                const pct = jsonbinRateLimit.remaining / jsonbinRateLimit.limit;
-                if (pct <= 0.10) {
-                    console.warn(`[JSONbin] ⚠️ CRITICAL: Only ${jsonbinRateLimit.remaining} requests remaining!`);
-                } else if (pct <= 0.25) {
-                    console.warn(`[JSONbin] ⚠️ Low requests: ${jsonbinRateLimit.remaining} / ${jsonbinRateLimit.limit} remaining.`);
-                }
-            }
-        }
-    }
-
     // Detect if opened as a local file — fetch() from file:// always fails CORS
     // (origin = 'null' is blocked by all browsers). Cloud sync simply can't work.
     const IS_LOCAL_FILE = window.location.protocol === 'file:';
@@ -1149,7 +1118,6 @@
                 throw new Error(`HTTP ${response.status}`);
             }
 
-            captureRateLimitHeaders(response);
             const result = await response.json();
             const data = result.record; // jsonbin wraps data in { record: ... }
 
@@ -1335,7 +1303,6 @@
                 throw new Error(`HTTP ${response.status}`);
             }
 
-            captureRateLimitHeaders(response);
             // jsonbin returns the saved data — confirmed success
             isDirty = false;
             lastSyncTime = Date.now();
@@ -1492,8 +1459,7 @@
             );
             
             if (!response.ok) return;
-
-            captureRateLimitHeaders(response);
+            
             const result = await response.json();
             const data = result.record;
             if (!data || !data.gameState) return;
@@ -1907,6 +1873,11 @@
             sendSystemChat(`⚔ ${username} has entered the Void.`);
             _stampIntegrity();
             checkAndResetDailyQuests();
+            // Restore glow if any quests are complete but unclaimed from a previous session
+            if (p.dailyQuests && p.dailyQuests.some(q => !q.claimed && q.progress >= q.target)) {
+                const navEl = document.getElementById('nav-quests');
+                if (navEl) navEl.classList.add('quest-glow');
+            }
             updateFrontierWarNotice();
             authDebug('Login complete!');
         } catch (err) {
@@ -3468,54 +3439,6 @@
         }
         
         refreshAdminPlayerList();
-
-        // ── JSONbin Rate Limit Panel ──
-        const rlEl = document.getElementById('admin-ratelimit');
-        if (rlEl) {
-            const rl = jsonbinRateLimit;
-            if (rl.remaining === null || rl.limit === null) {
-                rlEl.innerHTML = '<span style="color:#666;">Waiting for first API call...</span>';
-            } else {
-                const pct = rl.remaining / rl.limit;
-                const used = rl.limit - rl.remaining;
-                const barColor = pct <= 0.10 ? '#ff3333' : pct <= 0.25 ? '#ff8800' : '#44ff44';
-                const barWidth = Math.max(1, Math.round(pct * 100));
-                const statusLabel = pct <= 0.10 ? '⚠️ CRITICAL — Running out of requests!' :
-                                    pct <= 0.25 ? '⚠️ Warning — Requests getting low' :
-                                    '✓ OK';
-                const statusColor = pct <= 0.10 ? '#ff3333' : pct <= 0.25 ? '#ff8800' : '#44ff44';
-
-                let resetStr = '—';
-                if (rl.reset) {
-                    const resetDate = new Date(rl.reset);
-                    const now = Date.now();
-                    const diffMs = rl.reset - now;
-                    if (diffMs > 0) {
-                        const diffMins = Math.ceil(diffMs / 60000);
-                        resetStr = diffMins < 60
-                            ? `~${diffMins}m`
-                            : `~${Math.ceil(diffMins / 60)}h`;
-                        resetStr += ` (${resetDate.toLocaleTimeString()})`;
-                    } else {
-                        resetStr = 'Resetting soon...';
-                    }
-                }
-
-                const updatedStr = rl.lastUpdated
-                    ? new Date(rl.lastUpdated).toLocaleTimeString()
-                    : '—';
-
-                rlEl.innerHTML =
-                    `<div style="margin-bottom:8px; color:${statusColor}; font-weight:bold;">${statusLabel}</div>` +
-                    `<div style="background:#1a1a1a; border-radius:4px; height:12px; width:100%; margin-bottom:10px; overflow:hidden;">` +
-                        `<div style="width:${barWidth}%; height:100%; background:${barColor}; transition:width 0.4s;"></div>` +
-                    `</div>` +
-                    `<div><span style="color:#888;">Remaining:</span> <strong style="color:${barColor};">${rl.remaining.toLocaleString()}</strong> / ${rl.limit.toLocaleString()}</div>` +
-                    `<div><span style="color:#888;">Used this window:</span> ${used.toLocaleString()} (${(100 - barWidth)}%)</div>` +
-                    `<div><span style="color:#888;">Resets in:</span> ${resetStr}</div>` +
-                    `<div style="margin-top:6px; color:#555; font-size:0.78rem;">Last updated: ${updatedStr}</div>`;
-            }
-        }
     }
     
     function refreshAdminPlayerList() {
@@ -4736,11 +4659,25 @@
         }
     }
 
+    function notifyQuestComplete(quest) {
+        // Glow the nav tab
+        const navEl = document.getElementById('nav-quests');
+        if (navEl) navEl.classList.add('quest-glow');
+
+        // Show a brief popup like the black market purchase toast
+        showToast('purchase', '📜 Quest Complete!', quest.desc, 'Visit Daily Quests to claim your reward!');
+    }
+
     function trackQuestProgress(type, amount) {
         if (!p || !p.dailyQuests) return;
         p.dailyQuests.forEach(q => {
             if (q.type === type && !q.claimed) {
+                const wasComplete = q.progress >= q.target;
                 q.progress = Math.min(q.target, (q.progress || 0) + amount);
+                // Fire notification the moment a quest hits 100% for the first time
+                if (!wasComplete && q.progress >= q.target) {
+                    notifyQuestComplete(q);
+                }
             }
         });
     }
@@ -4779,6 +4716,10 @@
 
     function refreshQuestsUI() {
         checkAndResetDailyQuests();
+
+        // Clear the glow — player is now looking at the quests tab
+        const navEl = document.getElementById('nav-quests');
+        if (navEl) navEl.classList.remove('quest-glow');
 
         const container = document.getElementById('quest-list');
         const timerEl = document.getElementById('quest-timer');
