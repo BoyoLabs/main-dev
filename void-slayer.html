@@ -4018,7 +4018,7 @@
             ]
         },
         {
-            id: 'void_emperor', name: 'Void Emperor', emoji: '', image: 'https://i.imgur.com/2Nde6QX.png', tier: 9, unlockLevel: 90,
+            id: 'void_emperor', name: 'Void Emperor', emoji: '🫅', tier: 9, unlockLevel: 90,
             desc: 'Supreme ruler of the Void, whose power transcends mortal understanding.',
             rewardType: 'xp', baseHp: 16000, baseDamage: 95, hpPerLevel: 260, dmgPerLevel: 3.5,
             xpReward: 25000, goldReward: 0, regenPerMin: 180,
@@ -4031,7 +4031,7 @@
             ]
         },
         {
-            id: 'the_primordial', name: 'The Primordial', emoji: '', image: 'https://i.imgur.com/E0ybndU.png', tier: 10, unlockLevel: 100,
+            id: 'the_primordial', name: 'The Primordial', emoji: '🕳️', tier: 10, unlockLevel: 100,
             desc: 'The first being. The last being. The Void itself made flesh.',
             rewardType: 'gold', baseHp: 25000, baseDamage: 110, hpPerLevel: 300, dmgPerLevel: 4.0,
             xpReward: 0, goldReward: 50000, regenPerMin: 220,
@@ -4056,8 +4056,7 @@
         return {
             id: 'void_entity',
             name: `Void Entity (Tier ${tier})`,
-            emoji: '',
-            image: 'https://i.imgur.com/woqDYZl.png',
+            emoji: '🌀',
             tier: tier,
             unlockLevel: 100,
             desc: `An infinite manifestation of the Void itself. It reforms stronger each time it falls. Current Tier: ${tier}.`,
@@ -4129,6 +4128,7 @@
             html += `<div class="boss-card void-entity-card">`;
             html += `<div class="boss-tier" style="background:rgba(255,136,0,0.4); color:#ff8800;">⚡ INFINITE BOSS</div>`;
             html += `<h3 style="margin:0 0 5px 0; color:#ff8800;">${ve.emoji} ${ve.name}</h3>`;
+            if (ve.image) html += `<div style="margin: 6px 0;"><img src="${ve.image}" alt="${sanitize(ve.name)}" width="100" height="100" decoding="async" style="max-width:100px; max-height:100px; width:auto; height:auto; image-rendering:pixelated;"></div>`;
             html += `<p style="color:#888; font-size:0.85rem; margin:5px 0;">${ve.desc}</p>`;
 
             html += `<div class="boss-hp-bar"><div class="boss-hp-fill" style="width:100%; background:linear-gradient(90deg, #ff8800, #ff0000);"></div>`;
