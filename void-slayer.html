@@ -4542,7 +4542,7 @@
         });
 
         const rarityOrder = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
-        const sorted = Object.values(stacked).sort((a, b) => (rarityOrder[a.rarity] || 5) - (rarityOrder[b.rarity] || 5));
+        const sorted = Object.values(stacked).sort((a, b) => (rarityOrder[a.rarity] ?? 5) - (rarityOrder[b.rarity] ?? 5));
 
         let html = '<div style="margin-top:15px;"><h4 style="color:var(--gold); margin-bottom:8px;">🏆 Boss Trophies</h4>';
         html += '<div class="trophy-grid">';
