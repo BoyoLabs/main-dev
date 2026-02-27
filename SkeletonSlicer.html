@@ -3,268 +3,2072 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pro JS Slicer - Gyroid & Optimized Trees</title>
+    <title>Skeleton Slicer</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; background: #121212; color: #eee; overflow: hidden; }
-        #toolbar { padding: 12px; background: #1f1f1f; display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; border-bottom: 1px solid #333; z-index: 10; }
-        #viewer { flex-grow: 1; position: relative; }
-        .controls { display: flex; flex-direction: column; gap: 4px; }
-        label { font-size: 11px; text-transform: uppercase; color: #888; font-weight: bold; }
-        select, input, button { background: #2a2a2a; color: white; border: 1px solid #444; padding: 6px 10px; border-radius: 4px; font-size: 13px; }
-        button { background: #007bff; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        button:hover { background: #0056b3; }
-        #status-bar { position: absolute; bottom: 15px; left: 15px; background: rgba(0,0,0,0.8); padding: 10px 15px; border-radius: 8px; width: 250px; border: 1px solid #444; }
-        #progress-bg { width: 100%; height: 8px; background: #333; border-radius: 4px; margin-top: 8px; overflow: hidden; }
-        #progress-fill { width: 0%; height: 100%; background: #28a745; transition: width 0.1s; }
-        .row { display: flex; gap: 8px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-deep: #0a0e14;
+            --bg-panel: #111820;
+            --bg-input: #182230;
+            --border: #1e2d3d;
+            --border-hover: #2a4a6b;
+            --text: #c5d1de;
+            --text-dim: #5a7089;
+            --text-bright: #e6edf5;
+            --accent: #00e5a0;
+            --accent-dim: rgba(0, 229, 160, 0.15);
+            --accent-glow: rgba(0, 229, 160, 0.4);
+            --warn: #ff6b6b;
+            --blue: #4dabf7;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg-deep);
+            color: var(--text);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ═══════ SIDEBAR ═══════ */
+        #sidebar {
+            width: 330px;
+            min-width: 330px;
+            background: var(--bg-panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        #sidebar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        #sidebar::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        .logo-area {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 34px;
+            height: 34px;
+            background: var(--accent);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--bg-deep);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .logo-text {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-bright);
+            letter-spacing: -0.3px;
+        }
+
+        .logo-sub {
+            font-size: 10px;
+            color: var(--text-dim);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .section {
+            padding: 16px 22px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-dim);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .field {
+            margin-bottom: 10px;
+        }
+
+        .field:last-child {
+            margin-bottom: 0;
+        }
+
+        .field-label {
+            font-size: 12px;
+            color: var(--text);
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        select,
+        input[type="number"] {
+            width: 100%;
+            background: var(--bg-input);
+            color: var(--text-bright);
+            border: 1px solid var(--border);
+            padding: 7px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: 'DM Sans', sans-serif;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        select:hover,
+        input[type="number"]:hover {
+            border-color: var(--border-hover);
+        }
+
+        select:focus,
+        input[type="number"]:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-dim);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-drop {
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 18px 14px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s;
+            background: transparent;
+        }
+
+        .file-drop:hover,
+        .file-drop.drag-over {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+        }
+
+        .file-drop-icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .file-drop-text {
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .row > * {
+            flex: 1;
+        }
+
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 0;
+        }
+
+        .toggle-label {
+            font-size: 13px;
+        }
+
+        .toggle {
+            width: 40px;
+            height: 22px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.25s;
+            flex-shrink: 0;
+        }
+
+        .toggle.on {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.25s;
+        }
+
+        .toggle.on::after {
+            transform: translateX(18px);
+        }
+
+        /* ═══════ BUTTONS ═══════ */
+        .slice-btn {
+            width: 100%;
+            padding: 13px;
+            background: var(--accent);
+            color: var(--bg-deep);
+            font-size: 14px;
+            font-weight: 700;
+            font-family: 'DM Sans', sans-serif;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .slice-btn:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        .slice-btn:active {
+            transform: translateY(0);
+        }
+
+        .slice-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+            filter: none;
+            box-shadow: none;
+        }
+
+        .btn-small {
+            background: var(--bg-input);
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 11px;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            transition: all 0.15s;
+        }
+
+        .btn-small:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* ═══════ MODEL LIST ═══════ */
+        .model-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .model-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .model-item:hover {
+            border-color: var(--border-hover);
+        }
+
+        .model-item.selected {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+        }
+
+        .model-item .model-color {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .model-item .model-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-bright);
+        }
+
+        .model-item .model-size {
+            color: var(--text-dim);
+            font-size: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            white-space: nowrap;
+        }
+
+        .model-item .model-delete {
+            color: var(--text-dim);
+            font-size: 14px;
+            cursor: pointer;
+            padding: 0 4px;
+            transition: color 0.15s;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .model-item .model-delete:hover {
+            color: var(--warn);
+        }
+
+        .empty-hint {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-align: center;
+            padding: 8px 0;
+            font-style: italic;
+        }
+
+        /* ═══════ SELECTED MODEL PANEL ═══════ */
+        #selectedControls {
+            display: none;
+        }
+
+        #selectedControls.visible {
+            display: block;
+        }
+
+        .sel-header {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--accent);
+            margin-bottom: 10px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* ═══════ VIEWER ═══════ */
+        #viewer-container {
+            flex: 1;
+            position: relative;
+            background: var(--bg-deep);
+        }
+
+        #status-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(17, 24, 32, 0.92);
+            backdrop-filter: blur(12px);
+            padding: 14px 18px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            min-width: 280px;
+            z-index: 5;
+        }
+
+        #status-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+
+        #progress-bg {
+            width: 100%;
+            height: 4px;
+            background: var(--bg-input);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        #progress-fill {
+            width: 0%;
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.15s;
+        }
+
+        .info-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(17, 24, 32, 0.85);
+            backdrop-filter: blur(12px);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            z-index: 5;
+            line-height: 1.7;
+        }
+
+        .info-badge .val {
+            color: var(--text-bright);
+        }
+
+        .drag-hint {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(17, 24, 32, 0.9);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 11px;
+            color: var(--text-dim);
+            font-family: 'JetBrains Mono', monospace;
+            z-index: 4;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            border: 1px solid var(--border);
+        }
+
+        .drag-hint.show {
+            opacity: 1;
+        }
+
+        @media (max-width: 900px) {
+            body {
+                flex-direction: column;
+            }
+            #sidebar {
+                width: 100%;
+                min-width: unset;
+                max-height: 45vh;
+            }
+        }
     </style>
 </head>
 <body>
 
-<div id="toolbar">
-    <div class="controls">
-        <label>Printer</label>
-        <select id="printerSelect">
-            <option value="neptune3pro">Elegoo Neptune 3 Pro</option>
-            <option value="ender3v2">Ender 3 V2</option>
-            <option value="bambu">Bambu Lab P1P</option>
-        </select>
+<!-- ═══════════════════════════════════════════ -->
+<!--                  SIDEBAR                   -->
+<!-- ═══════════════════════════════════════════ -->
+<div id="sidebar">
+    <div class="logo-area">
+        <div class="logo-icon">S</div>
+        <div>
+            <div class="logo-text">Skeleton Slicer</div>
+            <div class="logo-sub">v2.1 — multi-model</div>
+        </div>
     </div>
-    <div class="controls">
-        <label>STL File</label>
-        <input type="file" id="fileInput" accept=".stl">
+
+    <!-- MODELS SECTION -->
+    <div class="section">
+        <div class="section-title">
+            Models
+            <button class="btn-small" id="autoArrangeBtn">Auto Arrange</button>
+        </div>
+        <div class="file-drop" id="fileDrop">
+            <div class="file-drop-icon">⬡</div>
+            <div class="file-drop-text">Drop STL files or click to add</div>
+        </div>
+        <input type="file" id="fileInput" accept=".stl" multiple>
+        <div class="model-list" id="modelList">
+            <div class="empty-hint" id="emptyHint">No models loaded</div>
+        </div>
     </div>
-    <div class="controls">
-        <label>Infill (%) & Type</label>
+
+    <!-- SELECTED MODEL CONTROLS -->
+    <div class="section" id="selectedControls">
+        <div class="section-title">Selected Model</div>
+        <div class="sel-header" id="selModelName">—</div>
+        <div class="row" style="margin-bottom: 10px;">
+            <div class="field">
+                <div class="field-label">Pos X (mm)</div>
+                <input type="number" id="posX" value="0" step="5">
+            </div>
+            <div class="field">
+                <div class="field-label">Pos Y (mm)</div>
+                <input type="number" id="posZ" value="0" step="5">
+            </div>
+        </div>
         <div class="row">
-            <input type="number" id="infillDensity" value="15" min="0" max="100" style="width: 50px;">
-            <select id="infillType">
-                <option value="gyroid">Gyroid</option>
-                <option value="grid">Grid</option>
+            <div class="field">
+                <div class="field-label">Rot X°</div>
+                <input type="number" id="rotX" value="0" step="15">
+            </div>
+            <div class="field">
+                <div class="field-label">Rot Y°</div>
+                <input type="number" id="rotY" value="0" step="15">
+            </div>
+            <div class="field">
+                <div class="field-label">Rot Z°</div>
+                <input type="number" id="rotZ" value="0" step="15">
+            </div>
+        </div>
+    </div>
+
+    <!-- PRINTER -->
+    <div class="section">
+        <div class="section-title">Printer</div>
+        <div class="field">
+            <div class="field-label">Profile</div>
+            <select id="printerSelect">
+                <option value="neptune3pro" selected>Elegoo Neptune 3 Pro</option>
+                <option value="ender3v2">Ender 3 V2</option>
+                <option value="bambu">Bambu Lab P1P</option>
             </select>
         </div>
-    </div>
-    <div class="controls">
-        <label>Rotate (X, Y, Z)</label>
         <div class="row">
-            <input type="number" id="rotX" value="0" step="90" style="width: 45px;">
-            <input type="number" id="rotY" value="0" step="90" style="width: 45px;">
-            <input type="number" id="rotZ" value="0" step="90" style="width: 45px;">
+            <div class="field">
+                <div class="field-label">Nozzle Temp (°C)</div>
+                <input type="number" id="nozzleTemp" value="205" min="170" max="260">
+            </div>
+            <div class="field">
+                <div class="field-label">Bed Temp (°C)</div>
+                <input type="number" id="bedTemp" value="60" min="0" max="120">
+            </div>
         </div>
     </div>
-    <div class="controls">
-        <label>Supports</label>
-        <div class="row" style="align-items: center; gap: 5px; font-size: 12px;">
-            Trees: <input type="checkbox" id="treeToggle">
+
+    <!-- PRINT SETTINGS -->
+    <div class="section">
+        <div class="section-title">Print Settings</div>
+        <div class="row">
+            <div class="field">
+                <div class="field-label">Layer Height (mm)</div>
+                <input type="number" id="layerHeight" value="0.2" min="0.05" max="0.4" step="0.05">
+            </div>
+            <div class="field">
+                <div class="field-label">Line Width (mm)</div>
+                <input type="number" id="lineWidth" value="0.4" min="0.2" max="0.8" step="0.05">
+            </div>
+        </div>
+        <div class="row">
+            <div class="field">
+                <div class="field-label">Print Speed (mm/s)</div>
+                <input type="number" id="printSpeed" value="50" min="10" max="200">
+            </div>
+            <div class="field">
+                <div class="field-label">Travel Speed (mm/s)</div>
+                <input type="number" id="travelSpeed" value="120" min="50" max="300">
+            </div>
+        </div>
+        <div class="row">
+            <div class="field">
+                <div class="field-label">Wall Loops</div>
+                <input type="number" id="wallLoops" value="3" min="1" max="8">
+            </div>
+            <div class="field">
+                <div class="field-label">Top/Bottom Layers</div>
+                <input type="number" id="solidLayers" value="4" min="1" max="10">
+            </div>
         </div>
     </div>
-    <button id="sliceBtn">Slice & Download</button>
+
+    <!-- INFILL -->
+    <div class="section">
+        <div class="section-title">Infill</div>
+        <div class="row">
+            <div class="field">
+                <div class="field-label">Density (%)</div>
+                <input type="number" id="infillDensity" value="15" min="0" max="100">
+            </div>
+            <div class="field">
+                <div class="field-label">Pattern</div>
+                <select id="infillType">
+                    <option value="lines">Lines</option>
+                    <option value="grid">Grid</option>
+                    <option value="gyroid">Gyroid (approx)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUPPORTS -->
+    <div class="section">
+        <div class="section-title">Extras</div>
+        <div class="toggle-row">
+            <span class="toggle-label">Tree Supports</span>
+            <div class="toggle" id="treeToggle"></div>
+        </div>
+    </div>
+
+    <!-- RETRACTION -->
+    <div class="section">
+        <div class="section-title">Retraction</div>
+        <div class="row">
+            <div class="field">
+                <div class="field-label">Distance (mm)</div>
+                <input type="number" id="retractDist" value="5" min="0" max="10" step="0.5">
+            </div>
+            <div class="field">
+                <div class="field-label">Speed (mm/s)</div>
+                <input type="number" id="retractSpeed" value="45" min="10" max="100">
+            </div>
+        </div>
+    </div>
+
+    <!-- SLICE BUTTON -->
+    <div class="section" style="border-bottom: none;">
+        <button class="slice-btn" id="sliceBtn">⬡ Slice All & Export G-code</button>
+    </div>
 </div>
 
-<div id="viewer">
+<!-- ═══════════════════════════════════════════ -->
+<!--                  VIEWER                    -->
+<!-- ═══════════════════════════════════════════ -->
+<div id="viewer-container">
+    <div class="info-badge" id="modelInfo" style="display: none;"></div>
+    <div class="drag-hint" id="dragHint">Click a model to select · Drag to reposition on bed</div>
     <div id="status-bar">
-        <div id="status-text">Ready. Upload an STL.</div>
+        <div id="status-text">Ready — upload STL files to begin</div>
         <div id="progress-bg"><div id="progress-fill"></div></div>
     </div>
 </div>
 
 <script>
-    let scene, camera, renderer, model, controls, grid;
-    let supportGroup = new THREE.Group();
+// ══════════════════════════════════════════════════════════════
+//  SKELETON SLICER v2.1 — Multi-Model Browser Slicer
+//  Real mesh-plane intersection, contour chaining, offset walls,
+//  bounded infill, proper extrusion math, Neptune 3 Pro G-code
+// ══════════════════════════════════════════════════════════════
 
-    const PRINTERS = {
-        neptune3pro: { w: 225, d: 225, h: 280, start: "G28\nM420 S1\nG92 E0", end: "G28 X0\nM104 S0\nM140 S0\nM84" },
-        ender3v2: { w: 220, d: 220, h: 250, start: "G28\nG92 E0", end: "G28 X0\nM84" },
-        bambu: { w: 256, d: 256, h: 256, start: "G28\nG92 E0", end: "M104 S0" }
+// ====================================================================
+//  GLOBAL STATE
+// ====================================================================
+
+let scene, camera, renderer, controls, gridHelper;
+let supportGroup = new THREE.Group();
+
+// Filament constants (1.75mm PLA)
+const FILAMENT_DIA = 1.75;
+const FILAMENT_AREA = Math.PI * (FILAMENT_DIA / 2) ** 2;
+
+// Multi-model state
+const models = [];       // Array of model entries
+let selectedId = null;   // Currently selected model ID
+let nextId = 1;          // Auto-incrementing model ID
+
+// Drag-to-reposition state
+let isDragging = false;
+let dragEntry = null;
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Y=0 horizontal plane
+const dragIntersectPoint = new THREE.Vector3();
+
+// Color palette for models
+const MODEL_COLORS = [
+    0x3498db, 0xe67e22, 0x9b59b6, 0xe74c3c,
+    0x1abc9c, 0xf1c40f, 0x2ecc71, 0xfd79a8
+];
+
+// ====================================================================
+//  PRINTER PROFILES
+// ====================================================================
+
+const PRINTERS = {
+    neptune3pro: {
+        w: 225, d: 225, h: 280,
+        start: [
+            "; ═══════════════════════════════════════",
+            "; Skeleton Slicer — Elegoo Neptune 3 Pro",
+            "; ═══════════════════════════════════════",
+            "G21 ; set units to millimeters",
+            "G90 ; use absolute positioning",
+            "M82 ; use absolute extrusion",
+            "M140 S{bed_temp} ; set bed temperature",
+            "M104 S{nozzle_temp} ; set nozzle temperature",
+            "G28 ; home all axes",
+            "M420 S1 ; enable ABL mesh leveling",
+            "M190 S{bed_temp} ; wait for bed to reach temp",
+            "M109 S{nozzle_temp} ; wait for nozzle to reach temp",
+            "G92 E0 ; reset extruder position",
+            "; --- Prime nozzle ---",
+            "G1 Z2 F3000 ; lift nozzle",
+            "G1 X5 Y5 F5000 ; move to prime position",
+            "G1 Z0.28 F1500 ; lower to first layer height",
+            "G1 X5 Y200 E15 F1500 ; prime line 1",
+            "G1 X5.4 Y200 F5000 ; shift over",
+            "G1 X5.4 Y5 E30 F1500 ; prime line 2",
+            "G92 E0 ; reset extruder",
+            "G1 Z2 F3000 ; lift nozzle",
+            "; --- Begin printing ---"
+        ].join("\n"),
+        end: [
+            "; --- End G-code ---",
+            "G91 ; relative positioning",
+            "G1 E-2 F2700 ; retract filament",
+            "G1 Z10 F3000 ; lift nozzle 10mm",
+            "G90 ; absolute positioning",
+            "G28 X0 ; home X axis",
+            "G1 Y220 F3000 ; present print (move bed forward)",
+            "M104 S0 ; turn off nozzle heater",
+            "M140 S0 ; turn off bed heater",
+            "M84 ; disable stepper motors"
+        ].join("\n")
+    },
+    ender3v2: {
+        w: 220, d: 220, h: 250,
+        start: [
+            "; ═══════════════════════════════════════",
+            "; Skeleton Slicer — Ender 3 V2",
+            "; ═══════════════════════════════════════",
+            "G21 ; millimeters",
+            "G90 ; absolute positioning",
+            "M82 ; absolute extrusion",
+            "M140 S{bed_temp} ; set bed temp",
+            "M104 S{nozzle_temp} ; set nozzle temp",
+            "G28 ; home all axes",
+            "M190 S{bed_temp} ; wait for bed",
+            "M109 S{nozzle_temp} ; wait for nozzle",
+            "G92 E0",
+            "G1 Z2 F3000",
+            "G1 X5 Y5 F5000",
+            "G1 Z0.28 F1500",
+            "G1 X5 Y200 E15 F1500 ; prime line 1",
+            "G1 X5.4 Y200 F5000",
+            "G1 X5.4 Y5 E30 F1500 ; prime line 2",
+            "G92 E0",
+            "G1 Z2 F3000"
+        ].join("\n"),
+        end: [
+            "; --- End G-code ---",
+            "G91",
+            "G1 E-2 F2700 ; retract",
+            "G1 Z10 F3000 ; lift nozzle",
+            "G90",
+            "G28 X0 ; home X",
+            "G1 Y200 F3000 ; present print",
+            "M104 S0 ; nozzle off",
+            "M140 S0 ; bed off",
+            "M84 ; steppers off"
+        ].join("\n")
+    },
+    bambu: {
+        w: 256, d: 256, h: 256,
+        start: [
+            "; ═══════════════════════════════════════",
+            "; Skeleton Slicer — Bambu Lab P1P",
+            "; ═══════════════════════════════════════",
+            "G21",
+            "G90",
+            "M82",
+            "M140 S{bed_temp}",
+            "M104 S{nozzle_temp}",
+            "G28",
+            "M190 S{bed_temp}",
+            "M109 S{nozzle_temp}",
+            "G92 E0",
+            "G1 Z2 F3000"
+        ].join("\n"),
+        end: [
+            "; --- End G-code ---",
+            "G91",
+            "G1 E-2 F2700",
+            "G1 Z10 F3000",
+            "G90",
+            "M104 S0",
+            "M140 S0",
+            "M84"
+        ].join("\n")
+    }
+};
+
+
+// ====================================================================
+//  THREE.JS SCENE SETUP
+// ====================================================================
+
+function init() {
+    const container = document.getElementById('viewer-container');
+
+    // Scene
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0e14);
+    scene.fog = new THREE.Fog(0x0a0e14, 600, 1200);
+
+    // Camera
+    camera = new THREE.PerspectiveCamera(
+        40,
+        container.clientWidth / container.clientHeight,
+        0.1,
+        2000
+    );
+    camera.position.set(280, 220, 280);
+
+    // Renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    // Orbit Controls
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 30, 0);
+
+    // Lighting
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    keyLight.position.set(100, 250, 150);
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x88aacc, 0.3);
+    fillLight.position.set(-100, 100, -50);
+    scene.add(fillLight);
+
+    scene.add(new THREE.AmbientLight(0x334455, 0.6));
+
+    // Support group
+    scene.add(supportGroup);
+
+    // Build plate
+    updateBed('neptune3pro');
+
+    // Start render loop
+    animate();
+
+    // Resize handler
+    window.addEventListener('resize', () => {
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+
+    // Mouse interaction for drag-to-reposition
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    renderer.domElement.addEventListener('pointermove', onPointerMove);
+    renderer.domElement.addEventListener('pointerup', onPointerUp);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+function updateBed(printerKey) {
+    if (gridHelper) scene.remove(gridHelper);
+    const printer = PRINTERS[printerKey];
+
+    const group = new THREE.Group();
+
+    // Grid lines
+    const grid = new THREE.GridHelper(
+        printer.w,
+        Math.floor(printer.w / 10),
+        0x1a3040,
+        0x0f1e2a
+    );
+    group.add(grid);
+
+    // Plate surface
+    const plateGeometry = new THREE.PlaneGeometry(printer.w, printer.d);
+    const plateMaterial = new THREE.MeshBasicMaterial({
+        color: 0x0d1a24,
+        transparent: true,
+        opacity: 0.6
+    });
+    const plate = new THREE.Mesh(plateGeometry, plateMaterial);
+    plate.rotation.x = -Math.PI / 2;
+    plate.position.y = -0.1;
+    group.add(plate);
+
+    // Border outline
+    const borderGeometry = new THREE.EdgesGeometry(
+        new THREE.BoxGeometry(printer.w, 0.2, printer.d)
+    );
+    const borderMaterial = new THREE.LineBasicMaterial({
+        color: 0x00e5a0,
+        transparent: true,
+        opacity: 0.3
+    });
+    group.add(new THREE.LineSegments(borderGeometry, borderMaterial));
+
+    gridHelper = group;
+    scene.add(gridHelper);
+}
+
+
+// ====================================================================
+//  FILE LOADING — Multiple STL Support
+// ====================================================================
+
+const fileDrop = document.getElementById('fileDrop');
+const fileInput = document.getElementById('fileInput');
+
+fileDrop.addEventListener('click', () => fileInput.click());
+
+fileDrop.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    fileDrop.classList.add('drag-over');
+});
+
+fileDrop.addEventListener('dragleave', () => {
+    fileDrop.classList.remove('drag-over');
+});
+
+fileDrop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    fileDrop.classList.remove('drag-over');
+    for (const file of e.dataTransfer.files) {
+        if (file.name.toLowerCase().endsWith('.stl')) {
+            loadSTL(file);
+        }
+    }
+});
+
+fileInput.addEventListener('change', (e) => {
+    for (const file of e.target.files) {
+        loadSTL(file);
+    }
+    e.target.value = ''; // allow re-uploading same file name
+});
+
+function loadSTL(file) {
+    setStatus(`Loading ${file.name}...`);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        try {
+            // Parse STL geometry
+            const geometry = new THREE.STLLoader().parse(event.target.result);
+            geometry.computeVertexNormals();
+
+            // Assign a color from the palette
+            const colorIndex = models.length % MODEL_COLORS.length;
+            const color = MODEL_COLORS[colorIndex];
+
+            // Create mesh
+            const material = new THREE.MeshPhongMaterial({
+                color: color,
+                specular: 0x222222,
+                shininess: 40,
+                flatShading: false
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+
+            // Create model entry
+            const entry = {
+                id: nextId++,
+                name: file.name,
+                mesh: mesh,
+                geometry: geometry,
+                color: color,
+                bedX: 0,    // position on bed (scene X)
+                bedZ: 0,    // position on bed (scene Z)
+                rotX: 0,    // rotation degrees
+                rotY: 0,
+                rotZ: 0
+            };
+
+            // Add to state and scene
+            models.push(entry);
+            scene.add(mesh);
+
+            // Position the model on the bed
+            positionModel(entry);
+
+            // Select the newly added model
+            selectModel(entry.id);
+
+            // Rebuild the UI list
+            rebuildModelList();
+
+            // Refresh supports
+            analyzeAllSupports();
+
+            // Show the drag hint briefly
+            const hint = document.getElementById('dragHint');
+            hint.classList.add('show');
+            setTimeout(() => hint.classList.remove('show'), 3000);
+
+            setStatus(`${file.name} added — ${models.length} model(s) on bed`);
+            updateInfoBadge();
+
+        } catch (err) {
+            setStatus("Error loading STL: " + err.message);
+        }
     };
+    reader.readAsArrayBuffer(file);
+}
 
-    function init() {
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(45, window.innerWidth / (window.innerHeight - 80), 0.1, 2000);
-        camera.position.set(200, 200, 200);
+/**
+ * Position a model on the build plate based on its entry.bedX/bedZ and rotation.
+ * Centers it at the specified XZ position with its bottom sitting on Y=0.
+ */
+function positionModel(entry) {
+    const mesh = entry.mesh;
 
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight - 80);
-        document.getElementById('viewer').appendChild(renderer.domElement);
+    // Apply rotation
+    mesh.rotation.set(
+        THREE.MathUtils.degToRad(entry.rotX),
+        THREE.MathUtils.degToRad(entry.rotY),
+        THREE.MathUtils.degToRad(entry.rotZ)
+    );
 
-        controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
+    // Reset position to origin to measure true bounding box
+    mesh.position.set(0, 0, 0);
+    mesh.updateMatrixWorld(true);
 
-        const light = new THREE.DirectionalLight(0xffffff, 1);
-        light.position.set(100, 200, 100);
-        scene.add(light, new THREE.AmbientLight(0x444444));
-        scene.add(supportGroup);
+    // Compute bounding box after rotation
+    const bbox = new THREE.Box3().setFromObject(mesh);
+    const center = bbox.getCenter(new THREE.Vector3());
 
-        updateBed('neptune3pro');
-        animate();
+    // Place model so its center XZ is at bedX/bedZ, and bottom is at Y=0
+    mesh.position.set(
+        entry.bedX - center.x,
+        -bbox.min.y,
+        entry.bedZ - center.z
+    );
+    mesh.updateMatrixWorld(true);
+}
+
+
+// ====================================================================
+//  MODEL LIST UI
+// ====================================================================
+
+function rebuildModelList() {
+    const list = document.getElementById('modelList');
+    const hint = document.getElementById('emptyHint');
+
+    // Remove existing model items (keep the hint element)
+    list.querySelectorAll('.model-item').forEach(el => el.remove());
+
+    if (models.length === 0) {
+        hint.style.display = 'block';
+        document.getElementById('selectedControls').classList.remove('visible');
+        document.getElementById('modelInfo').style.display = 'none';
+        return;
     }
 
-    function animate() {
-        requestAnimationFrame(animate);
-        controls.update();
-        renderer.render(scene, camera);
+    hint.style.display = 'none';
+
+    models.forEach(entry => {
+        const div = document.createElement('div');
+        div.className = 'model-item' + (entry.id === selectedId ? ' selected' : '');
+        div.dataset.id = entry.id;
+
+        // Get model dimensions
+        const bbox = new THREE.Box3().setFromObject(entry.mesh);
+        const size = bbox.getSize(new THREE.Vector3());
+
+        // Build the list item HTML
+        const colorHex = '#' + entry.color.toString(16).padStart(6, '0');
+        div.innerHTML = `
+            <div class="model-color" style="background: ${colorHex}"></div>
+            <div class="model-name">${entry.name}</div>
+            <div class="model-size">${size.x.toFixed(0)}×${size.z.toFixed(0)}×${size.y.toFixed(0)}</div>
+            <div class="model-delete" title="Remove model">✕</div>
+        `;
+
+        // Click handler
+        div.addEventListener('click', (e) => {
+            if (e.target.classList.contains('model-delete')) {
+                removeModel(entry.id);
+            } else {
+                selectModel(entry.id);
+            }
+        });
+
+        list.appendChild(div);
+    });
+}
+
+function selectModel(id) {
+    // Remove highlight from previously selected
+    if (selectedId !== null) {
+        const prev = models.find(m => m.id === selectedId);
+        if (prev) {
+            prev.mesh.material.emissive = new THREE.Color(0x000000);
+        }
     }
 
-    function updateBed(key) {
-        if(grid) scene.remove(grid);
-        const p = PRINTERS[key];
-        grid = new THREE.GridHelper(p.w, 20, 0x444444, 0x222222);
-        scene.add(grid);
+    selectedId = id;
+    const entry = models.find(m => m.id === id);
+
+    if (!entry) {
+        document.getElementById('selectedControls').classList.remove('visible');
+        return;
     }
 
-    // --- IMPROVED TREE SUPPORT LOGIC ---
-    function analyzeSupports() {
-        supportGroup.clear();
-        if (!model || !document.getElementById('treeToggle').checked) return;
+    // Highlight selected model
+    entry.mesh.material.emissive = new THREE.Color(0x003322);
 
-        const positions = model.geometry.attributes.position.array;
-        const normals = model.geometry.attributes.normal.array;
-        const threshold = Math.cos(THREE.MathUtils.degToRad(45));
-        const supportMaterial = new THREE.MeshBasicMaterial({ color: 0x28a745, transparent: true, opacity: 0.5 });
-        
-        // Use a spatial grid to prevent support clustering
-        const occupied = new Set();
-        const gridRes = 8; // mm between supports
+    // Show and populate the selected model controls
+    document.getElementById('selectedControls').classList.add('visible');
+    document.getElementById('selModelName').textContent = entry.name;
+    document.getElementById('posX').value = Math.round(entry.bedX);
+    document.getElementById('posZ').value = Math.round(entry.bedZ);
+    document.getElementById('rotX').value = entry.rotX;
+    document.getElementById('rotY').value = entry.rotY;
+    document.getElementById('rotZ').value = entry.rotZ;
 
-        for (let i = 0; i < normals.length; i += 150) { // Large step for performance
-            const normalVec = new THREE.Vector3(normals[i], normals[i+1], normals[i+2]).applyQuaternion(model.quaternion);
+    // Update list selection styling
+    document.querySelectorAll('.model-item').forEach(el => {
+        el.classList.toggle('selected', parseInt(el.dataset.id) === id);
+    });
+}
 
-            if (normalVec.y < -threshold) { 
-                const worldPos = new THREE.Vector3(positions[i], positions[i+1], positions[i+2]).applyMatrix4(model.matrixWorld);
-                
+function removeModel(id) {
+    const index = models.findIndex(m => m.id === id);
+    if (index === -1) return;
+
+    // Remove from scene and clean up
+    scene.remove(models[index].mesh);
+    models[index].mesh.geometry.dispose();
+    models[index].mesh.material.dispose();
+    models.splice(index, 1);
+
+    // Update selection
+    if (selectedId === id) {
+        if (models.length > 0) {
+            selectedId = models[0].id;
+            selectModel(selectedId);
+        } else {
+            selectedId = null;
+            document.getElementById('selectedControls').classList.remove('visible');
+        }
+    }
+
+    rebuildModelList();
+    analyzeAllSupports();
+    updateInfoBadge();
+    setStatus(models.length > 0 ? `${models.length} model(s) on bed` : "Ready — upload STL files");
+}
+
+function updateInfoBadge() {
+    const info = document.getElementById('modelInfo');
+    if (models.length === 0) {
+        info.style.display = 'none';
+        return;
+    }
+
+    info.style.display = 'block';
+    let totalTriangles = 0;
+    models.forEach(m => {
+        totalTriangles += m.geometry.attributes.position.count / 3;
+    });
+
+    const printer = PRINTERS[document.getElementById('printerSelect').value];
+    info.innerHTML =
+        `<span class="val">${models.length} model(s)</span><br>` +
+        `${totalTriangles.toLocaleString()} total triangles<br>` +
+        `Bed: ${printer.w}×${printer.d} mm`;
+}
+
+
+// ====================================================================
+//  SELECTED MODEL — Position & Rotation Inputs
+// ====================================================================
+
+['posX', 'posZ'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+        const entry = models.find(m => m.id === selectedId);
+        if (!entry) return;
+
+        entry.bedX = parseFloat(document.getElementById('posX').value) || 0;
+        entry.bedZ = parseFloat(document.getElementById('posZ').value) || 0;
+        positionModel(entry);
+        analyzeAllSupports();
+    });
+});
+
+['rotX', 'rotY', 'rotZ'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+        const entry = models.find(m => m.id === selectedId);
+        if (!entry) return;
+
+        entry.rotX = parseFloat(document.getElementById('rotX').value) || 0;
+        entry.rotY = parseFloat(document.getElementById('rotY').value) || 0;
+        entry.rotZ = parseFloat(document.getElementById('rotZ').value) || 0;
+        positionModel(entry);
+        rebuildModelList(); // sizes change with rotation
+        analyzeAllSupports();
+    });
+});
+
+
+// ====================================================================
+//  DRAG TO REPOSITION ON BED
+// ====================================================================
+
+function getMouseNDC(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+}
+
+function onPointerDown(event) {
+    getMouseNDC(event);
+    raycaster.setFromCamera(mouse, camera);
+
+    // Test intersection against all model meshes
+    const meshes = models.map(m => m.mesh);
+    const hits = raycaster.intersectObjects(meshes);
+
+    if (hits.length > 0) {
+        // Found a model — select it and start dragging
+        const hitMesh = hits[0].object;
+        const entry = models.find(m => m.mesh === hitMesh);
+        if (entry) {
+            selectModel(entry.id);
+            rebuildModelList();
+            isDragging = true;
+            dragEntry = entry;
+            controls.enabled = false; // disable orbit while dragging
+            renderer.domElement.style.cursor = 'grabbing';
+        }
+    } else {
+        // Clicked empty space — deselect
+        if (selectedId !== null) {
+            const prev = models.find(m => m.id === selectedId);
+            if (prev) {
+                prev.mesh.material.emissive = new THREE.Color(0x000000);
+            }
+        }
+        selectedId = null;
+        document.getElementById('selectedControls').classList.remove('visible');
+        document.querySelectorAll('.model-item').forEach(el => {
+            el.classList.remove('selected');
+        });
+    }
+}
+
+function onPointerMove(event) {
+    if (!isDragging || !dragEntry) {
+        // Just update hover cursor
+        getMouseNDC(event);
+        raycaster.setFromCamera(mouse, camera);
+        const meshes = models.map(m => m.mesh);
+        const hits = raycaster.intersectObjects(meshes);
+        renderer.domElement.style.cursor = hits.length > 0 ? 'grab' : 'default';
+        return;
+    }
+
+    // Drag model: intersect ray with horizontal plane at Y=0
+    getMouseNDC(event);
+    raycaster.setFromCamera(mouse, camera);
+
+    if (raycaster.ray.intersectPlane(dragPlane, dragIntersectPoint)) {
+        dragEntry.bedX = dragIntersectPoint.x;
+        dragEntry.bedZ = dragIntersectPoint.z;
+        positionModel(dragEntry);
+
+        // Update position inputs to reflect drag
+        document.getElementById('posX').value = Math.round(dragEntry.bedX);
+        document.getElementById('posZ').value = Math.round(dragEntry.bedZ);
+    }
+}
+
+function onPointerUp() {
+    if (isDragging) {
+        isDragging = false;
+        dragEntry = null;
+        controls.enabled = true;
+        renderer.domElement.style.cursor = 'default';
+        analyzeAllSupports();
+    }
+}
+
+
+// ====================================================================
+//  AUTO ARRANGE — Simple Row Packing
+// ====================================================================
+
+document.getElementById('autoArrangeBtn').addEventListener('click', autoArrange);
+
+function autoArrange() {
+    if (models.length === 0) return;
+
+    const printer = PRINTERS[document.getElementById('printerSelect').value];
+    const padding = 10; // mm between models
+    const halfW = printer.w / 2;
+    const halfD = printer.d / 2;
+
+    // Get each model's footprint (width and depth on XZ plane)
+    const footprints = models.map(entry => {
+        const box = new THREE.Box3().setFromObject(entry.mesh);
+        const size = box.getSize(new THREE.Vector3());
+        return { entry, w: size.x, d: size.z };
+    });
+
+    // Sort largest first for better packing
+    footprints.sort((a, b) => (b.w * b.d) - (a.w * a.d));
+
+    // Row-based placement
+    let cursorX = -halfW + padding;
+    let cursorZ = -halfD + padding;
+    let rowHeight = 0;
+
+    footprints.forEach(({ entry, w, d }) => {
+        // Wrap to next row if this model won't fit
+        if (cursorX + w + padding > halfW) {
+            cursorX = -halfW + padding;
+            cursorZ += rowHeight + padding;
+            rowHeight = 0;
+        }
+
+        entry.bedX = cursorX + w / 2;
+        entry.bedZ = cursorZ + d / 2;
+        positionModel(entry);
+
+        cursorX += w + padding;
+        rowHeight = Math.max(rowHeight, d);
+    });
+
+    // Refresh UI
+    if (selectedId) selectModel(selectedId);
+    rebuildModelList();
+    analyzeAllSupports();
+    setStatus("Models auto-arranged on bed");
+}
+
+
+// ====================================================================
+//  TREE SUPPORTS (Visual Preview)
+// ====================================================================
+
+document.getElementById('treeToggle').addEventListener('click', function () {
+    this.classList.toggle('on');
+    analyzeAllSupports();
+});
+
+function analyzeAllSupports() {
+    supportGroup.clear();
+    if (!document.getElementById('treeToggle').classList.contains('on')) return;
+
+    const threshold = Math.cos(THREE.MathUtils.degToRad(50));
+    const supportMaterial = new THREE.MeshPhongMaterial({
+        color: 0x00e5a0,
+        transparent: true,
+        opacity: 0.35
+    });
+
+    const occupied = new Set();
+    const gridRes = 6; // mm between support pillars
+
+    models.forEach(entry => {
+        const mesh = entry.mesh;
+        const positions = mesh.geometry.attributes.position.array;
+        const normals = mesh.geometry.attributes.normal.array;
+
+        // Sample every 5th triangle for performance
+        for (let i = 0; i < positions.length; i += 9 * 5) {
+            if (i + 2 >= normals.length) break;
+
+            const normal = new THREE.Vector3(
+                normals[i], normals[i + 1], normals[i + 2]
+            ).applyQuaternion(mesh.quaternion);
+
+            if (normal.y < -threshold) {
+                const worldPos = new THREE.Vector3(
+                    positions[i], positions[i + 1], positions[i + 2]
+                ).applyMatrix4(mesh.matrixWorld);
+
                 const gridX = Math.round(worldPos.x / gridRes);
                 const gridZ = Math.round(worldPos.z / gridRes);
                 const key = `${gridX},${gridZ}`;
 
-                if (!occupied.has(key) && worldPos.y > 1) {
+                if (!occupied.has(key) && worldPos.y > 2) {
                     occupied.add(key);
-                    const height = worldPos.y; 
-                    const branchGeom = new THREE.CylinderGeometry(0.5, 2.5, height, 6);
-                    const branch = new THREE.Mesh(branchGeom, supportMaterial);
-                    branch.position.set(worldPos.x, height / 2, worldPos.z);
-                    supportGroup.add(branch);
+                    const height = worldPos.y;
+                    const trunkGeo = new THREE.CylinderGeometry(0.4, 1.8, height, 5);
+                    const trunk = new THREE.Mesh(trunkGeo, supportMaterial);
+                    trunk.position.set(worldPos.x, height / 2, worldPos.z);
+                    supportGroup.add(trunk);
                 }
             }
         }
-        document.getElementById('status-text').innerText = "Supports Optimized.";
+    });
+}
+
+
+// ====================================================================
+//  SLICER CORE — Triangle-Plane Intersection
+// ====================================================================
+
+/**
+ * Intersect a triangle (v0, v1, v2) with a horizontal plane at Y = planeY.
+ * Returns a segment [{x,y}, {x,y}] in the XZ plane, or null.
+ * Note: 3D X maps to 2D x, 3D Z maps to 2D y.
+ */
+function intersectTriPlane(v0, v1, v2, planeY) {
+    const verts = [v0, v1, v2];
+    const dists = verts.map(v => v.y - planeY);
+
+    // All vertices on the same side of the plane?
+    if ((dists[0] > 0 && dists[1] > 0 && dists[2] > 0) ||
+        (dists[0] < 0 && dists[1] < 0 && dists[2] < 0)) {
+        return null;
     }
 
-    // --- GYROID INFILL G-CODE GENERATOR ---
-    function generateInfill(z, bbox, density, type) {
-        if (density <= 0) return "";
-        let g = `; INFILL START (${type})\n`;
-        const scale = 0.4; // Pattern frequency
-        const step = 2.5; // Line spacing resolution
-        
-        for (let x = bbox.min.x; x < bbox.max.x; x += step) {
-            for (let y = bbox.min.z; y < bbox.max.z; y += step) {
-                let shouldPrint = false;
-                
-                if (type === 'gyroid') {
-                    const val = Math.sin(x * scale) * Math.cos(y * scale) + 
-                                Math.sin(y * scale) * Math.cos(z * scale) + 
-                                Math.sin(z * scale) * Math.cos(x * scale);
-                    if (Math.abs(val) < (density / 80)) shouldPrint = true;
-                } else {
-                    // Simple Grid logic
-                    if (Math.abs(x % 10) < 0.5 || Math.abs(y % 10) < 0.5) shouldPrint = true;
-                }
+    // Two or more vertices exactly on the plane — degenerate, skip
+    const onPlane = dists.filter(d => Math.abs(d) < 1e-6).length;
+    if (onPlane >= 2) return null;
 
-                if (shouldPrint) {
-                    g += `G1 X${x.toFixed(2)} Y${y.toFixed(2)} E0.08\n`;
-                }
+    // Find intersection points
+    const points = [];
+    for (let i = 0; i < 3; i++) {
+        const j = (i + 1) % 3;
+        const di = dists[i];
+        const dj = dists[j];
+
+        if (Math.abs(di) < 1e-6) {
+            // Vertex i is on the plane
+            points.push({ x: verts[i].x, y: verts[i].z });
+            continue;
+        }
+
+        if ((di > 0) !== (dj > 0)) {
+            // Edge crosses the plane
+            const t = di / (di - dj);
+            points.push({
+                x: verts[i].x + t * (verts[j].x - verts[i].x),
+                y: verts[i].z + t * (verts[j].z - verts[i].z)
+            });
+        }
+    }
+
+    // Deduplicate very close points
+    const unique = [points[0]];
+    for (let i = 1; i < points.length; i++) {
+        let isDuplicate = false;
+        for (const u of unique) {
+            if (Math.abs(points[i].x - u.x) < 1e-4 &&
+                Math.abs(points[i].y - u.y) < 1e-4) {
+                isDuplicate = true;
+                break;
             }
         }
-        return g;
+        if (!isDuplicate) unique.push(points[i]);
     }
 
-    document.getElementById('treeToggle').onchange = analyzeSupports;
-    document.getElementById('printerSelect').onchange = (e) => updateBed(e.target.value);
+    return unique.length === 2 ? [unique[0], unique[1]] : null;
+}
 
-    document.getElementById('fileInput').onchange = (e) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const geometry = new THREE.STLLoader().parse(event.target.result);
-            if(model) scene.remove(model);
-            model = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ color: 0x007bff }));
-            recenter();
-            scene.add(model);
-            analyzeSupports();
-            document.getElementById('status-text').innerText = "Model Loaded.";
-        };
-        reader.readAsArrayBuffer(e.target.files[0]);
-    };
+/**
+ * Extract all triangles from ALL models in world space.
+ */
+function getAllWorldTriangles() {
+    const triangles = [];
 
-    function recenter() {
-        if(!model) return;
-        model.geometry.computeBoundingBox();
-        const center = model.geometry.boundingBox.getCenter(new THREE.Vector3());
-        // Align bottom of model to bed (Y=0)
-        model.position.set(-center.x, -model.geometry.boundingBox.min.y, -center.z);
-        model.updateMatrixWorld();
-    }
+    models.forEach(entry => {
+        entry.mesh.updateMatrixWorld(true);
+        const positions = entry.geometry.attributes.position.array;
+        const matrix = entry.mesh.matrixWorld;
 
-    ['rotX', 'rotY', 'rotZ'].forEach(id => {
-        document.getElementById(id).oninput = () => {
-            if(!model) return;
-            model.rotation.set(
-                THREE.MathUtils.degToRad(document.getElementById('rotX').value),
-                THREE.MathUtils.degToRad(document.getElementById('rotY').value),
-                THREE.MathUtils.degToRad(document.getElementById('rotZ').value)
-            );
-            recenter();
-            analyzeSupports();
-        };
+        for (let i = 0; i < positions.length; i += 9) {
+            const v0 = new THREE.Vector3(positions[i],     positions[i + 1], positions[i + 2]).applyMatrix4(matrix);
+            const v1 = new THREE.Vector3(positions[i + 3], positions[i + 4], positions[i + 5]).applyMatrix4(matrix);
+            const v2 = new THREE.Vector3(positions[i + 6], positions[i + 7], positions[i + 8]).applyMatrix4(matrix);
+            triangles.push([v0, v1, v2]);
+        }
     });
 
-    document.getElementById('sliceBtn').onclick = function() {
-        if(!model) return alert("Upload a model!");
-        const profile = PRINTERS[document.getElementById('printerSelect').value];
-        const density = document.getElementById('infillDensity').value;
-        const type = document.getElementById('infillType').value;
-        const layerH = 0.2;
-        const bbox = new THREE.Box3().setFromObject(model);
-        const height = bbox.max.y - bbox.min.y;
-        const layers = Math.ceil(height / layerH);
+    return triangles;
+}
 
-        let gcode = [profile.start];
-        let current = 0;
+/**
+ * Combined bounding box of all models.
+ */
+function getAllBoundingBox() {
+    const box = new THREE.Box3();
+    models.forEach(entry => box.expandByObject(entry.mesh));
+    return box;
+}
 
-        function sliceLayer() {
-            if(current < layers) {
-                let z = (current * layerH).toFixed(2);
-                gcode.push(`; LAYER:${current}\nG1 Z${z} F3000`);
-                
-                // Add Infill per layer
-                gcode.push(generateInfill(parseFloat(z), bbox, density, type));
 
-                const percent = Math.floor((current / layers) * 100);
-                document.getElementById('progress-fill').style.width = percent + "%";
-                document.getElementById('status-text').innerText = `Slicing layer ${current}...`;
-                current++;
-                setTimeout(sliceLayer, 0); 
-            } else {
-                gcode.push(profile.end);
-                download(gcode.join("\n"));
-                document.getElementById('status-text').innerText = "Complete!";
-                document.getElementById('progress-fill').style.width = "0%";
-            }
-        }
-        sliceLayer();
-    };
+// ====================================================================
+//  SLICER CORE — Contour Chaining
+// ====================================================================
 
-    function download(text) {
-        const blob = new Blob([text], { type: 'text/plain' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = "print.gcode";
-        a.click();
+/**
+ * Chain unordered line segments into closed contour loops.
+ */
+function chainSegments(segments) {
+    if (segments.length === 0) return [];
+
+    const EPS = 0.05;
+    const used = new Array(segments.length).fill(false);
+    const contours = [];
+
+    function pointsEqual(a, b) {
+        return Math.abs(a.x - b.x) < EPS && Math.abs(a.y - b.y) < EPS;
     }
 
-    window.onload = init;
+    for (let start = 0; start < segments.length; start++) {
+        if (used[start]) continue;
+        used[start] = true;
+
+        const chain = [segments[start][0], segments[start][1]];
+
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (let i = 0; i < segments.length; i++) {
+                if (used[i]) continue;
+
+                const tail = chain[chain.length - 1];
+                const head = chain[0];
+
+                if (pointsEqual(segments[i][0], tail)) {
+                    chain.push(segments[i][1]);
+                    used[i] = true;
+                    changed = true;
+                } else if (pointsEqual(segments[i][1], tail)) {
+                    chain.push(segments[i][0]);
+                    used[i] = true;
+                    changed = true;
+                } else if (pointsEqual(segments[i][1], head)) {
+                    chain.unshift(segments[i][0]);
+                    used[i] = true;
+                    changed = true;
+                } else if (pointsEqual(segments[i][0], head)) {
+                    chain.unshift(segments[i][1]);
+                    used[i] = true;
+                    changed = true;
+                }
+            }
+        }
+
+        if (chain.length >= 3) {
+            contours.push(chain);
+        }
+    }
+
+    return contours;
+}
+
+
+// ====================================================================
+//  SLICER CORE — Contour Offset (for wall insets)
+// ====================================================================
+
+/**
+ * Offset a closed contour inward by `dist` mm.
+ * Uses averaged vertex normals with angle compensation.
+ */
+function offsetContour(contour, dist) {
+    if (contour.length < 3) return [];
+
+    const n = contour.length;
+    const result = [];
+
+    for (let i = 0; i < n; i++) {
+        const prev = contour[(i - 1 + n) % n];
+        const curr = contour[i];
+        const next = contour[(i + 1) % n];
+
+        // Edge normals (rotated 90° CW = inward for CCW contours)
+        let n1x = curr.y - prev.y;
+        let n1y = -(curr.x - prev.x);
+        let n2x = next.y - curr.y;
+        let n2y = -(next.x - curr.x);
+
+        // Normalize
+        const len1 = Math.sqrt(n1x * n1x + n1y * n1y) || 1;
+        const len2 = Math.sqrt(n2x * n2x + n2y * n2y) || 1;
+        n1x /= len1;
+        n1y /= len1;
+        n2x /= len2;
+        n2y /= len2;
+
+        // Average normal direction
+        let avgX = n1x + n2x;
+        let avgY = n1y + n2y;
+        const avgLen = Math.sqrt(avgX * avgX + avgY * avgY) || 1;
+        avgX /= avgLen;
+        avgY /= avgLen;
+
+        // Compensate for angle to maintain consistent offset distance
+        const dot = n1x * avgX + n1y * avgY;
+        const adjustedDist = dot > 0.1 ? dist / dot : dist;
+
+        result.push({
+            x: curr.x + avgX * adjustedDist,
+            y: curr.y + avgY * adjustedDist
+        });
+    }
+
+    return result;
+}
+
+/**
+ * Compute signed area of a contour. Positive = CCW, Negative = CW.
+ */
+function contourArea(contour) {
+    let area = 0;
+    for (let i = 0; i < contour.length; i++) {
+        const j = (i + 1) % contour.length;
+        area += contour[i].x * contour[j].y;
+        area -= contour[j].x * contour[i].y;
+    }
+    return area / 2;
+}
+
+
+// ====================================================================
+//  SLICER CORE — Point-in-Contour Tests
+// ====================================================================
+
+/**
+ * Ray-casting point-in-polygon test for a single contour.
+ */
+function pointInContour(px, py, contour) {
+    let inside = false;
+    for (let i = 0, j = contour.length - 1; i < contour.length; j = i++) {
+        const xi = contour[i].x, yi = contour[i].y;
+        const xj = contour[j].x, yj = contour[j].y;
+        if (((yi > py) !== (yj > py)) &&
+            (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
+/**
+ * Point-in-model test using even-odd rule across all contours.
+ * Handles multiple outlines and holes correctly.
+ */
+function pointInsideModel(px, py, contours) {
+    let count = 0;
+    for (const contour of contours) {
+        if (pointInContour(px, py, contour)) count++;
+    }
+    return (count % 2) === 1;
+}
+
+
+// ====================================================================
+//  G-CODE GENERATION — Extrusion Math
+// ====================================================================
+
+function dist2D(a, b) {
+    return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
+}
+
+/**
+ * Calculate extrusion amount E for a given move distance.
+ * Volume deposited = distance × layerHeight × lineWidth
+ * Volume extruded = E × filament cross-section area
+ */
+function calcE(distance, layerH, lineW) {
+    return (distance * layerH * lineW) / FILAMENT_AREA;
+}
+
+
+// ====================================================================
+//  G-CODE GENERATION — Perimeters (Walls)
+// ====================================================================
+
+function generatePerimeterGcode(contour, E, feedRate, layerH, lineW) {
+    if (contour.length < 2) return { gcode: "", E };
+
+    let gcode = "";
+
+    // Travel to start of contour
+    gcode += `G0 X${contour[0].x.toFixed(3)} Y${contour[0].y.toFixed(3)} F${feedRate.travel}\n`;
+
+    // Print along contour
+    for (let i = 1; i < contour.length; i++) {
+        const d = dist2D(contour[i - 1], contour[i]);
+        E += calcE(d, layerH, lineW);
+        gcode += `G1 X${contour[i].x.toFixed(3)} Y${contour[i].y.toFixed(3)} E${E.toFixed(5)} F${feedRate.print}\n`;
+    }
+
+    // Close the loop back to start
+    const closeDist = dist2D(contour[contour.length - 1], contour[0]);
+    E += calcE(closeDist, layerH, lineW);
+    gcode += `G1 X${contour[0].x.toFixed(3)} Y${contour[0].y.toFixed(3)} E${E.toFixed(5)} F${feedRate.print}\n`;
+
+    return { gcode, E };
+}
+
+
+// ====================================================================
+//  G-CODE GENERATION — Infill Patterns
+// ====================================================================
+
+function generateInfillGcode(contours, bbox2D, zHeight, E, feedRate, layerH, lineW, density, infillType, layerNum) {
+    if (density <= 0) return { gcode: "", E };
+
+    let gcode = "; INFILL\n";
+    const spacing = lineW / (density / 100);
+
+    /**
+     * Scan-line fill in one direction.
+     * @param {boolean} scanX - true to scan along X (lines at constant Y)
+     * @param {number} offset - starting offset from bbox edge
+     */
+    function scanFill(scanX, offset) {
+        if (scanX) {
+            for (let y = bbox2D.minY + offset; y < bbox2D.maxY; y += spacing) {
+                const points = [];
+                for (let x = bbox2D.minX; x < bbox2D.maxX; x += 0.5) {
+                    if (pointInsideModel(x, y, contours)) {
+                        points.push({ x, y });
+                    }
+                }
+                if (points.length < 2) continue;
+
+                // Travel to first point
+                gcode += `G0 X${points[0].x.toFixed(3)} Y${points[0].y.toFixed(3)} F${feedRate.travel}\n`;
+
+                for (let i = 1; i < points.length; i++) {
+                    const d = dist2D(points[i - 1], points[i]);
+                    if (d > 2) {
+                        // Gap detected — travel move
+                        gcode += `G0 X${points[i].x.toFixed(3)} Y${points[i].y.toFixed(3)} F${feedRate.travel}\n`;
+                    } else {
+                        // Print move
+                        E += calcE(d, layerH, lineW);
+                        gcode += `G1 X${points[i].x.toFixed(3)} Y${points[i].y.toFixed(3)} E${E.toFixed(5)} F${feedRate.print}\n`;
+                    }
+                }
+            }
+        } else {
+            for (let x = bbox2D.minX + offset; x < bbox2D.maxX; x += spacing) {
+                const points = [];
+                for (let y = bbox2D.minY; y < bbox2D.maxY; y += 0.5) {
+                    if (pointInsideModel(x, y, contours)) {
+                        points.push({ x, y });
+                    }
+                }
+                if (points.length < 2) continue;
+
+                gcode += `G0 X${points[0].x.toFixed(3)} Y${points[0].y.toFixed(3)} F${feedRate.travel}\n`;
+
+                for (let i = 1; i < points.length; i++) {
+                    const d = dist2D(points[i - 1], points[i]);
+                    if (d > 2) {
+                        gcode += `G0 X${points[i].x.toFixed(3)} Y${points[i].y.toFixed(3)} F${feedRate.travel}\n`;
+                    } else {
+                        E += calcE(d, layerH, lineW);
+                        gcode += `G1 X${points[i].x.toFixed(3)} Y${points[i].y.toFixed(3)} E${E.toFixed(5)} F${feedRate.print}\n`;
+                    }
+                }
+            }
+        }
+    }
+
+    // Apply selected infill pattern
+    if (infillType === 'lines') {
+        // Alternating direction each layer
+        const isEvenLayer = (layerNum % 2 === 0);
+        scanFill(isEvenLayer, spacing / 2);
+
+    } else if (infillType === 'grid') {
+        // Both directions
+        scanFill(true, spacing / 2);
+        scanFill(false, spacing / 2);
+
+    } else {
+        // Gyroid approximation using TPMS equation
+        const freq = 0.3;
+        for (let y = bbox2D.minY + spacing / 2; y < bbox2D.maxY; y += spacing) {
+            const points = [];
+            for (let x = bbox2D.minX; x < bbox2D.maxX; x += 0.5) {
+                const val = Math.sin(x * freq) * Math.cos(y * freq) +
+                            Math.sin(y * freq) * Math.cos(zHeight * freq) +
+                            Math.sin(zHeight * freq) * Math.cos(x * freq);
+
+                if (Math.abs(val) < 0.4 && pointInsideModel(x, y, contours)) {
+                    points.push({ x, y });
+                }
+            }
+            if (points.length < 2) continue;
+
+            gcode += `G0 X${points[0].x.toFixed(3)} Y${points[0].y.toFixed(3)} F${feedRate.travel}\n`;
+            for (let i = 1; i < points.length; i++) {
+                const d = dist2D(points[i - 1], points[i]);
+                if (d > 2) {
+                    gcode += `G0 X${points[i].x.toFixed(3)} Y${points[i].y.toFixed(3)} F${feedRate.travel}\n`;
+                } else {
+                    E += calcE(d, layerH, lineW);
+                    gcode += `G1 X${points[i].x.toFixed(3)} Y${points[i].y.toFixed(3)} E${E.toFixed(5)} F${feedRate.print}\n`;
+                }
+            }
+        }
+    }
+
+    return { gcode, E };
+}
+
+
+// ====================================================================
+//  MAIN SLICE — Process All Models Together
+// ====================================================================
+
+document.getElementById('sliceBtn').addEventListener('click', async function () {
+    if (models.length === 0) {
+        return alert("Add at least one model!");
+    }
+
+    const btn = this;
+    btn.disabled = true;
+
+    // Read all settings
+    const printerKey = document.getElementById('printerSelect').value;
+    const profile = PRINTERS[printerKey];
+    const nozzleTemp = parseInt(document.getElementById('nozzleTemp').value);
+    const bedTemp = parseInt(document.getElementById('bedTemp').value);
+    const layerH = parseFloat(document.getElementById('layerHeight').value);
+    const lineW = parseFloat(document.getElementById('lineWidth').value);
+    const printSpeed = parseInt(document.getElementById('printSpeed').value);
+    const travelSpeed = parseInt(document.getElementById('travelSpeed').value);
+    const wallLoops = parseInt(document.getElementById('wallLoops').value);
+    const solidLayers = parseInt(document.getElementById('solidLayers').value);
+    const infillDensity = parseInt(document.getElementById('infillDensity').value);
+    const infillType = document.getElementById('infillType').value;
+    const retractDist = parseFloat(document.getElementById('retractDist').value);
+    const retractSpeed = parseInt(document.getElementById('retractSpeed').value);
+
+    const feedRate = {
+        print: printSpeed * 60,     // convert mm/s to mm/min
+        travel: travelSpeed * 60,
+        retract: retractSpeed * 60
+    };
+
+    // Combined bounding box of all models
+    const bbox = getAllBoundingBox();
+    const modelSize = bbox.getSize(new THREE.Vector3());
+
+    // Calculate offset to center models on the build plate in G-code space
+    const offsetX = profile.w / 2 - (bbox.min.x + bbox.max.x) / 2;
+    const offsetZ = profile.d / 2 - (bbox.min.z + bbox.max.z) / 2;
+
+    // Validate model fits on bed
+    if (modelSize.x > profile.w || modelSize.z > profile.d) {
+        alert(
+            `Combined footprint (${modelSize.x.toFixed(1)} × ${modelSize.z.toFixed(1)} mm) ` +
+            `exceeds build plate (${profile.w} × ${profile.d} mm)!\n` +
+            `Try Auto Arrange or reposition models.`
+        );
+        btn.disabled = false;
+        return;
+    }
+    if (modelSize.y > profile.h) {
+        alert(`Tallest point (${modelSize.y.toFixed(1)} mm) exceeds max height (${profile.h} mm)!`);
+        btn.disabled = false;
+        return;
+    }
+
+    // Extract all triangles from all models
+    setStatus("Extracting triangles from all models...");
+    await sleep(10);
+
+    const triangles = getAllWorldTriangles();
+    const totalLayers = Math.ceil(modelSize.y / layerH);
+
+    setStatus(
+        `Slicing ${totalLayers} layers · ${triangles.length.toLocaleString()} triangles · ${models.length} model(s)...`
+    );
+    await sleep(10);
+
+    // Build start G-code with temperatures substituted
+    const startGcode = profile.start
+        .replace(/\{nozzle_temp\}/g, nozzleTemp)
+        .replace(/\{bed_temp\}/g, bedTemp);
+
+    const gcodeChunks = [startGcode + "\n"];
+    let E = 0; // Absolute extrusion position
+
+    // 2D bounding box in G-code coordinates
+    const bbox2D = {
+        minX: bbox.min.x + offsetX,
+        maxX: bbox.max.x + offsetX,
+        minY: bbox.min.z + offsetZ,
+        maxY: bbox.max.z + offsetZ
+    };
+
+    // Layer-by-layer slicing
+    const BATCH_SIZE = 5; // Update UI every N layers
+
+    for (let layer = 0; layer < totalLayers; layer++) {
+        // Slice at the midpoint of the layer
+        const sliceZ = bbox.min.y + layer * layerH + layerH / 2;
+        const gcodeZ = (layer * layerH + layerH).toFixed(3);
+
+        // 1) Intersect all triangles with this horizontal plane
+        const segments = [];
+        for (const tri of triangles) {
+            const seg = intersectTriPlane(tri[0], tri[1], tri[2], sliceZ);
+            if (seg) {
+                // Transform to G-code coordinate space
+                segments.push([
+                    { x: seg[0].x + offsetX, y: seg[0].y + offsetZ },
+                    { x: seg[1].x + offsetX, y: seg[1].y + offsetZ }
+                ]);
+            }
+        }
+
+        // 2) Chain segments into closed contours
+        const contours = chainSegments(segments);
+        if (contours.length === 0) continue;
+
+        // Start layer G-code
+        let layerGcode = `\n; ═══ LAYER ${layer} Z=${gcodeZ} ═══\n`;
+        layerGcode += `G1 Z${gcodeZ} F${feedRate.print}\n`;
+
+        // Determine if this is a solid layer (bottom or top skin)
+        const isSolidLayer = (layer < solidLayers) || (layer >= totalLayers - solidLayers);
+
+        // 3) Generate perimeter walls
+        for (const contour of contours) {
+            // Ensure consistent winding (CCW)
+            const area = contourArea(contour);
+            const ordered = area < 0 ? contour.slice().reverse() : contour;
+
+            for (let wallIndex = 0; wallIndex < wallLoops; wallIndex++) {
+                const offsetDist = lineW * (wallIndex + 0.5);
+                const wallContour = offsetContour(ordered, offsetDist);
+
+                if (wallContour.length < 3) continue;
+
+                // Retract before traveling to new perimeter
+                if (wallIndex === 0) {
+                    E -= retractDist;
+                    layerGcode += `G1 E${E.toFixed(5)} F${feedRate.retract} ; retract\n`;
+                }
+
+                const result = generatePerimeterGcode(wallContour, E, feedRate, layerH, lineW);
+                layerGcode += result.gcode;
+                E = result.E;
+            }
+        }
+
+        // 4) Generate infill (100% for solid layers, user % for others)
+        const innerContours = contours.map(contour => {
+            const area = contourArea(contour);
+            const ordered = area < 0 ? contour.slice().reverse() : contour;
+            return offsetContour(ordered, lineW * (wallLoops + 0.5));
+        }).filter(c => c.length >= 3);
+
+        if (innerContours.length > 0) {
+            const fillDensity = isSolidLayer ? 100 : infillDensity;
+            const fillType = isSolidLayer ? 'lines' : infillType;
+
+            // Retract before infill
+            E -= retractDist;
+            layerGcode += `G1 E${E.toFixed(5)} F${feedRate.retract} ; retract\n`;
+
+            const infillResult = generateInfillGcode(
+                innerContours, bbox2D, parseFloat(gcodeZ),
+                E, feedRate, layerH, lineW,
+                fillDensity, fillType, layer
+            );
+            layerGcode += infillResult.gcode;
+            E = infillResult.E;
+        }
+
+        gcodeChunks.push(layerGcode);
+
+        // Update progress UI periodically
+        if (layer % BATCH_SIZE === 0) {
+            const percent = Math.floor((layer / totalLayers) * 100);
+            setProgress(percent);
+            setStatus(`Slicing layer ${layer} / ${totalLayers}...`);
+            await sleep(0); // yield to browser for UI update
+        }
+    }
+
+    // Append end G-code
+    gcodeChunks.push("\n" + profile.end + "\n");
+
+    // Finalize
+    setProgress(100);
+    setStatus("Generating G-code file...");
+    await sleep(50);
+
+    const finalGcode = gcodeChunks.join("");
+    downloadGcode(finalGcode);
+
+    const lineCount = finalGcode.split('\n').length;
+    setStatus(
+        `Done! ${totalLayers} layers · ${lineCount.toLocaleString()} G-code lines · ${models.length} model(s)`
+    );
+    setProgress(0);
+    btn.disabled = false;
+});
+
+
+// ====================================================================
+//  UTILITIES
+// ====================================================================
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function setStatus(text) {
+    document.getElementById('status-text').textContent = text;
+}
+
+function setProgress(percent) {
+    document.getElementById('progress-fill').style.width = percent + "%";
+}
+
+function downloadGcode(text) {
+    const blob = new Blob([text], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+
+    // Name the file based on number of models
+    if (models.length === 1) {
+        link.download = models[0].name.replace(/\.stl$/i, '') + ".gcode";
+    } else {
+        link.download = "multi_print_" + models.length + "_models.gcode";
+    }
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// ====================================================================
+//  EVENT BINDINGS & INITIALIZATION
+// ====================================================================
+
+document.getElementById('printerSelect').addEventListener('change', (e) => {
+    updateBed(e.target.value);
+    updateInfoBadge();
+});
+
+window.addEventListener('load', init);
 </script>
 </body>
 </html>
