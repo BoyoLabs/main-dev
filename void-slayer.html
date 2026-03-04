@@ -110,6 +110,21 @@
             input, select { width: 100%; }
             #chat-in { width: 65% !important; }
         }
+        /* Legal links */
+        .legal-links { font-size: 0.7rem; margin-top: 8px; display: flex; gap: 10px; justify-content: center; }
+        .legal-links a { color: #555; cursor: pointer; text-decoration: none; border-bottom: 1px dotted #444; transition: 0.2s; }
+        .legal-links a:hover { color: #888; border-bottom-color: #888; }
+        .legal-links.nav-legal { justify-content: flex-start; margin-top: 6px; }
+        #legal-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 10001; display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeInOverlay 0.2s ease; }
+        #legal-modal.hidden { display: none !important; }
+        #legal-modal-box { background: #0e0e14; border: 1px solid #333; max-width: 600px; width: 100%; max-height: 80vh; display: flex; flex-direction: column; }
+        #legal-modal-title { padding: 18px 24px; font-size: 1.1rem; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; color: var(--gold); border-bottom: 1px solid #222; }
+        #legal-modal-content { padding: 20px 24px; overflow-y: auto; font-size: 0.85rem; line-height: 1.7; color: #999; flex: 1; }
+        #legal-modal-content h3 { color: #ccc; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin: 18px 0 8px 0; }
+        #legal-modal-content h3:first-child { margin-top: 0; }
+        #legal-modal-content p { margin: 0 0 10px 0; }
+        #legal-modal-footer { padding: 14px 24px; border-top: 1px solid #222; display: flex; justify-content: flex-end; }
+
         /* Boss System */
         .boss-card { border: 1px solid #333; padding: 15px; margin-bottom: 12px; background: #0a0a0a; position: relative; overflow: hidden; }
         .boss-card.locked { opacity: 0.4; pointer-events: none; }
@@ -222,6 +237,10 @@
         <div style="margin-top: 10px;">
             <span class="debug" style="cursor:pointer; color:#664444; border-bottom:1px dotted #664444;" onclick="if(confirm('Clear all local data? You will need to register again.')){localStorage.removeItem('void-accounts-void-realm-default');localStorage.removeItem('void-gamestate-void-realm-default');document.getElementById('auth-debug').textContent='Local data cleared.';document.getElementById('auth-error').textContent='';}">Clear local data</span>
         </div>
+        <div class="legal-links">
+            <a onclick="showLegal('tos')">Terms of Service</a>
+            <a onclick="showLegal('privacy')">Privacy Policy</a>
+        </div>
     </div>
 </div>
 
@@ -237,6 +256,16 @@
 </div>
 
 <div id="nav-overlay" onclick="closeMenu()"></div>
+
+<div id="legal-modal" class="hidden" onclick="if(event.target===this)closeLegal()">
+    <div id="legal-modal-box">
+        <div id="legal-modal-title"></div>
+        <div id="legal-modal-content"></div>
+        <div id="legal-modal-footer">
+            <button class="action-btn" onclick="closeLegal()" style="background:#1a1a1f; border-color:#444; color:#ccc;">Close</button>
+        </div>
+    </div>
+</div>
 
 <nav id="main-nav">
     <h2 style="color:var(--accent)">VOID SLAYER</h2>
@@ -255,6 +284,10 @@
     <div class="debug" style="margin-top: auto; padding-top: 20px;">
         <span id="player-count">0</span> players online<br>
         <span id="cloud-status" style="color: #ffaa00;">Cloud: Connecting...</span>
+        <div class="legal-links nav-legal">
+            <a onclick="showLegal('tos')">Terms</a>
+            <a onclick="showLegal('privacy')">Privacy</a>
+        </div>
     </div>
     <div class="audio-toggle-wrap">
         <span class="audio-toggle-label" id="audio-label">Sound</span>
@@ -4924,6 +4957,74 @@
     // Quest system
     window.claimQuestReward = claimQuestReward;
 
+    // Legal modals
+    const LEGAL_CONTENT = {
+        tos: {
+            title: 'Terms of Service',
+            html: `
+                <p><strong>Last Updated:</strong> March 2026</p>
+                <p>By accessing or using Void-Slayer: Alive ("the Game"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree, do not use the Game.</p>
+                <h3>1. Eligibility</h3>
+                <p>You must be at least 13 years of age to use this Game. If you are under 18, you represent that a parent or legal guardian has reviewed and agreed to these Terms on your behalf.</p>
+                <h3>2. Account &amp; Conduct</h3>
+                <p>You are responsible for all activity under your chosen username. You agree not to: impersonate others, use offensive or hateful usernames, exploit bugs or manipulate game data, harass or abuse other players via chat or any other game feature, or attempt to reverse-engineer, hack, or disrupt the Game or its cloud services.</p>
+                <h3>3. User-Generated Content</h3>
+                <p>The Game includes chat and guild features. You are solely responsible for content you post. We reserve the right to moderate, delete, or restrict any content or accounts at our sole discretion without notice.</p>
+                <h3>4. No Warranty &amp; Limitation of Liability</h3>
+                <p>The Game is provided "as is" without warranty of any kind, express or implied. We are not liable for any data loss, service interruptions, or damages arising from your use of the Game. Game progress, virtual items, and cloud-synced data may be lost at any time.</p>
+                <h3>5. Intellectual Property</h3>
+                <p>All game content, design, code, and assets are the property of the Game's creator(s). You may not copy, distribute, or create derivative works without permission.</p>
+                <h3>6. Termination</h3>
+                <p>We may suspend or terminate your access at any time, for any reason, including violation of these Terms. Upon termination, your right to use the Game ceases immediately.</p>
+                <h3>7. Changes to Terms</h3>
+                <p>We may update these Terms at any time. Continued use of the Game after changes constitutes acceptance of the revised Terms.</p>
+                <h3>8. Governing Law</h3>
+                <p>These Terms shall be governed by applicable law in the jurisdiction of the Game operator's residence.</p>
+                <h3>9. Contact</h3>
+                <p>For questions about these Terms, reach out via the in-game admin or community channels.</p>
+            `
+        },
+        privacy: {
+            title: 'Privacy Policy',
+            html: `
+                <p><strong>Last Updated:</strong> March 2026</p>
+                <p>This Privacy Policy describes how Void-Slayer: Alive ("the Game") collects, uses, and protects your information.</p>
+                <h3>1. Information We Collect</h3>
+                <p><strong>Account Data:</strong> When you register, we store your chosen username, password (hashed), character class, and avatar selection. No email address or real name is required.</p>
+                <p><strong>Gameplay Data:</strong> Your game progress, stats, inventory, guild membership, quest status, and boss fight history are stored to provide the Game experience.</p>
+                <p><strong>Chat Messages:</strong> Messages sent in the public tavern chat or guild chat are stored as part of the game state and are visible to other players.</p>
+                <p><strong>Technical Data:</strong> We may collect basic connection metadata such as timestamps for cloud sync. We do not collect IP addresses, device identifiers, or browser fingerprints through the Game itself.</p>
+                <h3>2. How We Store Data</h3>
+                <p>Data is stored locally in your browser (localStorage) and synced to a cloud service (jsonbin.io) to enable multiplayer functionality. Data is transmitted over HTTPS. We do not maintain a traditional server-side database.</p>
+                <h3>3. How We Use Data</h3>
+                <p>Your data is used solely to: operate and maintain the Game and multiplayer features, sync your progress across sessions, display leaderboards and player profiles, and enable chat and guild systems.</p>
+                <h3>4. Data Sharing</h3>
+                <p>We do not sell or share your personal data with third parties. Game data stored on jsonbin.io is subject to their own terms of service and privacy policy. Other players can see your username, avatar, level, stats, guild, and chat messages.</p>
+                <h3>5. Data Retention &amp; Deletion</h3>
+                <p>Your data persists as long as the Game is operational. You may clear your local data at any time via the login screen. To request deletion of cloud-stored data, contact an admin through in-game channels.</p>
+                <h3>6. Children's Privacy</h3>
+                <p>The Game is not intended for children under 13. We do not knowingly collect data from children under 13. If you believe a child under 13 has used the Game, please contact us so we can remove their data.</p>
+                <h3>7. Security</h3>
+                <p>We use reasonable measures to protect your data, including HTTPS transmission and Content Security Policy headers. However, no system is completely secure, and we cannot guarantee absolute security.</p>
+                <h3>8. Changes to This Policy</h3>
+                <p>We may update this Privacy Policy at any time. Continued use of the Game constitutes acceptance of the revised policy.</p>
+                <h3>9. Contact</h3>
+                <p>For privacy concerns or data deletion requests, reach out via the in-game admin or community channels.</p>
+            `
+        }
+    };
+
+    window.showLegal = function(type) {
+        const data = LEGAL_CONTENT[type];
+        if (!data) return;
+        document.getElementById('legal-modal-title').textContent = data.title;
+        document.getElementById('legal-modal-content').innerHTML = data.html;
+        document.getElementById('legal-modal').classList.remove('hidden');
+    };
+    window.closeLegal = function() {
+        document.getElementById('legal-modal').classList.add('hidden');
+    };
+
     // Admin (functions internally verify admin status)
     window.adminResetStats = adminResetStats;
     window.adminFullReset = adminFullReset;
@@ -5003,7 +5104,7 @@
         'doBossRest','claimQuestReward','adminResetStats','adminFullReset',
         'adminClearChat','adminClearNews','adminClearWars','adminGiveGold',
         'downloadBackup','uploadBackup','toggleAudio','dismissDesyncBanner','dismissSyncModal',
-        'buyItemMax',
+        'buyItemMax','showLegal','closeLegal',
         '_goBack','_showPlayer','_attackPlayer','_joinGuild','_kickMember',
         '_adminBan','_adminUnban','_adminDelete','_showTrophy'
     ];
